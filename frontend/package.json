@@ -1,0 +1,35 @@
+{
+  "name": "woo-frontend",
+  "version": "0.1.0",
+  "description": "WOO Hackathon Frontend - React/Expo",
+  "main": "index.js",
+  "scripts": {
+    "dev": "expo start",
+    "web": "expo start --web",
+    "start": "expo start --web",
+    "android": "expo start --android",
+    "ios": "expo start --ios"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "expo": "^54.0.20",
+    "expo-router": "^3.4.0",
+    "expo-status-bar": "^1.11.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-native": "^0.73.0",
+    "react-native-web": "^0.19.0",
+    "typescript": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-native": "^0.73.0",
+    "nativewind": "^2.0.11",
+    "tailwindcss": "^3.3.6",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.31"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

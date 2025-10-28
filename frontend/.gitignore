@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+.expo-shared/
+dist/
+npm-debug.*
+*.js
+*.jsx
+*.ts
+*.tsx
+*.jsfmt.json
+dist/
+.env
+.env.local
