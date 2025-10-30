@@ -1,4 +1,0 @@
-{
-  "ignore_dirs": ["node_modules", ".expo", "dist"],
-  "watchman_timeout_ms": 10000
-}
