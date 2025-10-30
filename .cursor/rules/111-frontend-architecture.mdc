@@ -1,0 +1,901 @@
+---
+description: Frontend architecture guide covering routing, state management, and design system with React, Tailwind, and shadcn/ui
+globs: frontend/**/*
+alwaysApply: false
+---
+
+# Frontend Architecture & Design System
+
+## Architecture Overview
+
+This frontend uses a **clear separation of concerns**:
+- **Zustand**: UI state (modals, filters, selections, local UI state)
+- **TanStack Query**: Server state (API data, caching, background sync)
+- **Expo Router**: File-based routing for web, iOS, Android
+- **Tailwind + shadcn/ui**: Consistent design system and components
+
+This architecture enables scalable collaborative workspaces with automatic data synchronization.
+
+## Tech Stack
+
+### Core Framework
+- **Expo Router 3.4+**: File-based routing for web, iOS, Android
+- **React 18.2**: UI library with hooks
+- **React Native + React Native Web**: Cross-platform support
+- **TypeScript 5.3**: Type safety
+- **Axios 1.6**: HTTP client
+
+### State Management Strategy
+
+#### Zustand - UI State Only
+Lightweight store for UI state that doesn't need persistence or syncing:
+```bash
+npm install zustand
+```
+
+**Use Zustand for:**
+- Modal visibility (open/close dialogs)
+- Sidebar/menu toggles
+- Filter selections
+- Active tab/view
+- Form draft state (unsaved data)
+
+**Do NOT use Zustand for:**
+- API data (use TanStack Query instead)
+- Server state
+- Shared user data
+
+#### TanStack Query - Server State & Background Sync
+Powerful data synchronization with automatic caching and background refetching:
+```bash
+npm install @tanstack/react-query
+```
+
+**Use TanStack Query for:**
+- Workspace data
+- User/collaborator information
+- Documents and files
+- Any data from backend API
+- Automatic background updates (staleTime-based)
+- Optimistic updates for better UX
+
+**Key features:**
+- Auto-caching with configurable staleness
+- Background refetching when data goes stale
+- Request deduplication
+- Automatic retry logic
+- Loading/error states management
+
+### Styling & Components
+
+#### Component Library
+Use **shadcn/ui** for all UI components (built on Radix UI + Tailwind CSS):
+```bash
+npx shadcn@latest init
+npx shadcn@latest add button input dialog dropdown-menu table card form label
+```
+
+**Key benefits:**
+- Accessible by default (Radix UI primitives)
+- Fully customizable with Tailwind
+- Copy-paste components (no package lock-in)
+- Consistent design system
+
+#### Styling Foundation
+- **Tailwind CSS 4.0**: Utility-first styling with modern features
+- **shadcn/ui**: Pre-built accessible components
+- **CSS Variables**: For theme customization
+
+## Directory Structure
+
+```
+frontend/
+├── src/
+│   ├── pages/                    # Page components (React Router routes)
+│   │   ├── WorkspaceListPage.tsx    # List all workspaces
+│   │   ├── WorkspaceDetailPage.tsx  # Single workspace view
+│   │   ├── DocumentsPage.tsx        # Documents in workspace
+│   │   ├── LoginPage.tsx            # Login form
+│   │   ├── SignupPage.tsx           # Registration form
+│   │   └── NotFoundPage.tsx         # 404 page
+│   │
+│   ├── layouts/                  # Layout wrappers
+│   │   ├── RootLayout.tsx        # Root layout with QueryClient provider
+│   │   ├── AuthLayout.tsx        # Layout for auth pages
+│   │   └── WorkspaceLayout.tsx   # Protected workspace layout
+│
+│   ├── components/
+│   │   ├── ui/                       # shadcn/ui components
+│   │   │   ├── button.tsx            # Button component
+│   │   │   ├── dialog.tsx            # Modal dialog
+│   │   │   ├── input.tsx             # Form input
+│   │   │   ├── card.tsx              # Card container
+│   │   │   ├── form.tsx              # Form components
+│   │   │   ├── label.tsx             # Form label
+│   │   │   └── ...                   # Other shadcn components
+│   │   │
+│   │   └── features/                 # Feature-specific components
+│   │       ├── WorkspaceCard.tsx     # Workspace display card
+│   │       ├── WorkspaceHeader.tsx   # Workspace top bar
+│   │       ├── WorkspaceList.tsx     # List of user workspaces
+│   │       ├── CollaboratorsList.tsx # Active collaborators
+│   │       └── DocumentEditor.tsx    # Document editing
+│
+│   ├── hooks/                        # Custom React hooks
+│   │   ├── useWorkspace.ts          # Fetch single workspace
+│   │   ├── useWorkspaces.ts         # Fetch all user workspaces
+│   │   ├── useCollaborators.ts      # Fetch workspace collaborators
+│   │   ├── useDocuments.ts          # Fetch workspace documents
+│   │   └── useOptimisticUpdate.ts   # Pattern for optimistic updates
+│   │
+│   ├── store/                        # Zustand stores (UI state only)
+│   │   ├── index.ts                 # Export all stores
+│   │   ├── ui-store.ts              # Modal, sidebar visibility
+│   │   ├── workspace-ui-store.ts    # Workspace-specific UI state
+│   │   └── filter-store.ts          # Active filters and selections
+│   │
+│   ├── api/                          # TanStack Query hooks
+│   │   ├── index.ts                 # Export all query hooks
+│   │   ├── workspaces.ts            # Workspace queries and mutations
+│   │   ├── collaborators.ts         # Collaborator queries
+│   │   ├── documents.ts             # Document queries and mutations
+│   │   └── client.ts                # QueryClient configuration
+│   │
+│   ├── types/                        # TypeScript types
+│   │   ├── index.ts                 # Export all types
+│   │   ├── workspace.ts             # Workspace, WorkspaceUpdate, WorkspaceCreate
+│   │   ├── collaborator.ts          # User, Collaborator types
+│   │   ├── document.ts              # Document, DocumentUpdate types
+│   │   └── api.ts                   # API request/response types
+│   │
+│   ├── lib/
+│   │   ├── utils.ts                 # Utility functions (cn helper)
+│   │   └── constants.ts             # App-wide constants
+│   │
+│   ├── App.tsx                      # Root app component with router
+│   ├── main.tsx                     # Entry point
+│   └── index.css                    # Global Tailwind styles
+│
+├── public/                           # Static assets
+│   └── vite.svg
+├── index.html                        # HTML entry point
+├── vite.config.ts                    # Vite configuration
+├── tailwind.config.js                # Tailwind configuration
+├── postcss.config.js                 # PostCSS configuration
+├── tsconfig.json                     # TypeScript configuration
+├── tsconfig.node.json                # TypeScript config for Vite
+├── package.json                      # Dependencies
+└── .env.example                      # Environment variables template
+```
+
+## Core Patterns
+
+### 1. App Setup with React Router
+
+```typescript
+// src/main.tsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+```
+
+```typescript
+// src/App.tsx
+import { QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { queryClient } from './api/client';
+import { RootLayout } from './layouts/RootLayout';
+import { WorkspaceLayout } from './layouts/WorkspaceLayout';
+import { AuthLayout } from './layouts/AuthLayout';
+import LoginPage from './pages/LoginPage';
+import WorkspaceListPage from './pages/WorkspaceListPage';
+import WorkspaceDetailPage from './pages/WorkspaceDetailPage';
+import NotFoundPage from './pages/NotFoundPage';
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<RootLayout />}>
+            {/* Public auth routes */}
+            <Route element={<AuthLayout />}>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
+            </Route>
+
+            {/* Protected workspace routes */}
+            <Route element={<WorkspaceLayout />}>
+              <Route path="/workspaces" element={<WorkspaceListPage />} />
+              <Route path="/workspaces/:id" element={<WorkspaceDetailPage />} />
+            </Route>
+
+            {/* Redirects */}
+            <Route path="/" element={<Navigate to="/workspaces" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
+  );
+}
+```
+
+### 2. Protected Route Layout
+
+```typescript
+// src/layouts/WorkspaceLayout.tsx
+import { Navigate, Outlet } from 'react-router-dom';
+import { useAuthStore } from '@/store/auth-store';
+
+export function WorkspaceLayout() {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Outlet />
+    </div>
+  );
+}
+```
+
+### 3. QueryClient Configuration (Background Sync)
+
+```typescript
+// src/api/client.ts
+import { QueryClient } from '@tanstack/react-query';
+import axios from 'axios';
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,        // 5 min before marked stale
+      gcTime: 10 * 60 * 1000,          // Cache for 10 min
+      refetchOnWindowFocus: true,       // Refetch when window regains focus
+      refetchOnReconnect: true,         // Refetch when reconnected
+      retry: 2,                         // Retry failed requests twice
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
+
+// Axios instance with base configuration
+export const apiClient = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: true, // For cookies/sessions
+});
+```
+
+### 4. TanStack Query for Server State
+
+```typescript
+// src/api/workspaces.ts
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from './client';
+import type { Workspace, WorkspaceUpdate, WorkspaceCreate } from '@/types';
+
+// Query: Fetch all workspaces
+export const useWorkspaces = () => {
+  return useQuery({
+    queryKey: ['workspaces'],
+    queryFn: async () => {
+      const res = await apiClient.get('/workspaces');
+      return res.data as Workspace[];
+    },
+  });
+};
+
+// Query: Fetch single workspace
+export const useWorkspace = (workspaceId: string | undefined) => {
+  return useQuery({
+    queryKey: ['workspaces', workspaceId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/workspaces/${workspaceId}`);
+      return res.data as Workspace;
+    },
+    enabled: !!workspaceId, // Don't run if no ID
+  });
+};
+
+// Mutation: Create workspace
+export const useCreateWorkspace = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: WorkspaceCreate) =>
+      apiClient.post('/workspaces', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+    },
+  });
+};
+
+// Mutation: Update workspace
+export const useUpdateWorkspace = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: WorkspaceUpdate) =>
+      apiClient.put(`/workspaces/${id}`, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['workspaces', variables.id],
+      });
+    },
+  });
+};
+```
+
+### 5. Zustand Store for UI State
+
+```typescript
+// src/store/ui-store.ts
+import { create } from 'zustand';
+
+interface UIState {
+  isCreateModalOpen: boolean;
+  isSettingsOpen: boolean;
+  selectedWorkspaceId: string | null;
+  
+  setCreateModalOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean) => void;
+  setSelectedWorkspaceId: (id: string | null) => void;
+}
+
+export const useUIStore = create<UIState>((set) => ({
+  isCreateModalOpen: false,
+  isSettingsOpen: false,
+  selectedWorkspaceId: null,
+  
+  setCreateModalOpen: (open) => set({ isCreateModalOpen: open }),
+  setSettingsOpen: (open) => set({ isSettingsOpen: open }),
+  setSelectedWorkspaceId: (id) => set({ selectedWorkspaceId: id }),
+}));
+```
+
+### 6. Using Both Together in a Component
+
+```typescript
+// src/components/features/WorkspaceList.tsx
+import { useWorkspaces } from '@/api/workspaces';
+import { useUIStore } from '@/store/ui-store';
+import { WorkspaceCard } from './WorkspaceCard';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+
+export function WorkspaceList() {
+  // Server state (TanStack Query)
+  const { data: workspaces, isLoading, error } = useWorkspaces();
+  
+  // UI state (Zustand)
+  const { selectedWorkspaceId, setCreateModalOpen } = useUIStore();
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-destructive">Failed to load workspaces</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Button onClick={() => setCreateModalOpen(true)}>
+        Create Workspace
+      </Button>
+      
+      {workspaces?.map((workspace) => (
+        <WorkspaceCard
+          key={workspace.id}
+          workspace={workspace}
+          isActive={workspace.id === selectedWorkspaceId}
+          onSelect={() => setSelectedWorkspaceId(workspace.id)}
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+## Design System
+
+### Color Palette (shadcn/ui CSS Variables)
+
+Define in `src/index.css` using CSS variables for easy theme switching:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+```
+
+Configure Tailwind to use these variables in `tailwind.config.js`:
+
+```javascript
+module.exports = {
+  darkMode: ['class'],
+  content: [
+    './index.html',
+    './src/**/*.{js,ts,jsx,tsx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))',
+        },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))',
+        },
+      },
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
+      },
+    },
+  },
+  plugins: [require('tailwindcss-animate')],
+};
+```
+
+### Component Example: shadcn/ui Button Usage
+
+```typescript
+// src/pages/LoginPage.tsx
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+
+export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const navigate = useNavigate();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Handle login logic
+    navigate('/workspaces');
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Welcome back</CardTitle>
+          <CardDescription>Sign in to your account to continue</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full">
+              Sign In
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+```
+
+### Custom Component Example
+
+```typescript
+// src/components/features/WorkspaceCard.tsx
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+
+interface WorkspaceCardProps {
+  title: string;
+  description: string;
+  memberCount: number;
+  isActive?: boolean;
+  onClick?: () => void;
+}
+
+export function WorkspaceCard({
+  title,
+  description,
+  memberCount,
+  isActive,
+  onClick,
+}: WorkspaceCardProps) {
+  return (
+    <Card
+      onClick={onClick}
+      className={cn(
+        'cursor-pointer transition-all hover:shadow-md',
+        isActive && 'border-primary shadow-sm'
+      )}
+    >
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div>
+            <CardTitle>{title}</CardTitle>
+            <CardDescription>{description}</CardDescription>
+          </div>
+          <Badge variant="secondary">{memberCount} members</Badge>
+        </div>
+      </CardHeader>
+    </Card>
+  );
+}
+```
+
+## Background Sync Strategy
+
+TanStack Query handles background synchronization automatically:
+
+1. **Stale Time (5 minutes)**
+   - After 5 minutes, data is marked as stale
+   - Next component mount or window focus triggers refetch
+   - User sees cached data while fresh data loads
+
+2. **Window Focus Refetch**
+   - User switches back to tab → automatic refresh
+   - Great for multi-window collaboration
+
+3. **Reconnect Refetch**
+   - Network disconnected → cache used
+   - Network reconnected → automatic refresh
+   - Seamless offline → online transition
+
+4. **Optimistic Updates** (Manual implementation)
+   - Update UI immediately when user acts
+   - Revert on error
+   - Server confirms in background
+
+```typescript
+// Example optimistic update
+export const useUpdateDocument = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: DocumentUpdate) =>
+      axios.put(`${API_BASE}/documents/${data.id}`, data),
+    onMutate: async (newData) => {
+      // Cancel ongoing queries
+      await queryClient.cancelQueries({ queryKey: ['documents'] });
+      
+      // Snapshot old data
+      const previousDocs = queryClient.getQueryData(['documents']);
+      
+      // Optimistically update
+      queryClient.setQueryData(['documents'], (old: Document[]) =>
+        old.map(d => d.id === newData.id ? { ...d, ...newData } : d)
+      );
+      
+      return { previousDocs };
+    },
+    onError: (err, newData, context: any) => {
+      // Revert on error
+      queryClient.setQueryData(['documents'], context.previousDocs);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+};
+```
+
+## Development Workflow
+
+### Setup Commands
+
+```bash
+# Create Vite project
+npm create vite@latest frontend -- --template react-ts
+cd frontend
+
+# Install core dependencies
+npm install react-router-dom @tanstack/react-query zustand axios
+
+# Install Tailwind CSS
+npm install -D tailwindcss postcss autoprefixer tailwindcss-animate
+npx tailwindcss init -p
+
+# Initialize shadcn/ui
+npx shadcn@latest init
+
+# Add common shadcn components
+npx shadcn@latest add button input dialog dropdown-menu table card form label badge skeleton
+```
+
+### Vite Configuration
+
+```typescript
+// vite.config.ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
+  },
+});
+```
+
+### Feature Development Steps
+
+1. **Define types** in `types/`
+2. **Create API hooks** in `api/` with TanStack Query
+3. **Create UI store** (if needed) in `store/` with Zustand
+4. **Build components** in `components/features/`
+5. **Wire components together** in route files
+
+### Testing Setup
+
+```bash
+# Install testing dependencies
+npm install -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom
+```
+
+```typescript
+// vitest.config.ts
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+});
+```
+
+```typescript
+// src/test/setup.ts
+import '@testing-library/jest-dom';
+import { cleanup } from '@testing-library/react';
+import { afterEach } from 'vitest';
+
+afterEach(() => {
+  cleanup();
+});
+```
+
+### Testing Patterns
+
+```typescript
+// src/components/features/__tests__/WorkspaceList.test.tsx
+import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter } from 'react-router-dom';
+import { queryClient } from '@/api/client';
+import { WorkspaceList } from '../WorkspaceList';
+
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <QueryClientProvider client={queryClient}>
+    <BrowserRouter>
+      {children}
+    </BrowserRouter>
+  </QueryClientProvider>
+);
+
+test('WorkspaceList loads and displays data', async () => {
+  render(<WorkspaceList />, { wrapper });
+  
+  await waitFor(() => {
+    expect(screen.getByText('My Workspace')).toBeInTheDocument();
+  });
+});
+
+// Verify Zustand store changes
+test('Modal opens on button click', async () => {
+  const { user } = render(<WorkspaceList />, { wrapper });
+  
+  await user.click(screen.getByText('Create Workspace'));
+  
+  expect(useUIStore.getState().isCreateModalOpen).toBe(true);
+});
+```
+
+## Project Initialization Checklist
+
+### 1. Create Project
+- [ ] Run `npm create vite@latest frontend -- --template react-ts`
+- [ ] Navigate to project: `cd frontend`
+- [ ] Install dependencies: `npm install`
+
+### 2. Install Core Dependencies
+- [ ] `npm install react-router-dom @tanstack/react-query zustand axios`
+- [ ] `npm install -D tailwindcss postcss autoprefixer tailwindcss-animate`
+- [ ] `npx tailwindcss init -p`
+
+### 3. Setup shadcn/ui
+- [ ] `npx shadcn@latest init`
+- [ ] Add components: `npx shadcn@latest add button input card form label badge skeleton dialog`
+
+### 4. Configure Vite
+- [ ] Update `vite.config.ts` with path aliases
+- [ ] Add API proxy configuration
+- [ ] Set port to 3000
+
+### 5. Setup Project Structure
+- [ ] Create `src/pages/` directory
+- [ ] Create `src/layouts/` directory
+- [ ] Create `src/components/features/` directory
+- [ ] Create `src/api/` directory
+- [ ] Create `src/store/` directory
+- [ ] Create `src/hooks/` directory
+- [ ] Create `src/types/` directory
+- [ ] Create `src/lib/` directory
+
+### 6. Configure Routing
+- [ ] Create `App.tsx` with React Router
+- [ ] Create `RootLayout.tsx`
+- [ ] Create `WorkspaceLayout.tsx` (protected routes)
+- [ ] Create `AuthLayout.tsx`
+
+### 7. Setup State Management
+- [ ] Configure QueryClient in `src/api/client.ts`
+- [ ] Create axios instance with baseURL
+- [ ] Create UI store with Zustand
+
+### 8. Setup Testing
+- [ ] Install: `npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom`
+- [ ] Create `vitest.config.ts`
+- [ ] Create `src/test/setup.ts`
+- [ ] Add test script to `package.json`
+
+### 9. Environment Variables
+- [ ] Create `.env.example` with `VITE_API_BASE_URL`
+- [ ] Create `.env` (add to `.gitignore`)
+
+### 10. Start Development
+- [ ] Run `npm run dev`
+- [ ] Verify at `http://localhost:3000`
+- [ ] Test API proxy to backend
