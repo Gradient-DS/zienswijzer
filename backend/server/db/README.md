@@ -9,7 +9,6 @@ This directory contains the database schema, initialization, and helper function
 - `database.sqlite3` - SQLite database file (created automatically)
 - `seed_dummy_data.py` - Script to populate database with test data matching app.py dummy data
 - `__init__.py` - Module exports
-- `create_db.py` - Legacy script (deprecated, use `init_db()` instead)
 
 ## Quick Start
 
@@ -34,35 +33,17 @@ This will create all the dummy data that matches the `DUMMY_*` variables in `app
 ### 2. Use Database Functions in Your Code
 
 ```python
-from db import (
-    get_users,
-    get_workspaces,
-    get_cases,
-    get_documents,
-    get_stakeholders,
-)
+from . import db
 
-# Get all users
-users = get_users()
+# Example 1: Get all users
+users = db.get_users()
 print(users)
 
-# Get all workspaces
-workspaces = get_workspaces()
-
-# Get workspaces for a specific user
-user_workspaces = get_workspaces(user_id="user_1")
-
-# Get all cases with their document IDs
-cases = get_cases()
-
-# Get all documents
-documents = get_documents()
-
-# Get chunks for a document
+# Example 2 Get chunks for a document
 from db import get_chunks_by_document
 chunks = get_chunks_by_document("doc_1")
 
-# Get stakeholder mentions for a chunk
+# Example 3: Get stakeholder mentions for a chunk
 from db import get_chunk_stakeholders
 mentions = get_chunk_stakeholders("chunk_1")
 ```
@@ -83,14 +64,18 @@ mentions = get_chunk_stakeholders("chunk_1")
 - `get_workspaces(user_id: Optional[str] = None)` - Get all workspaces, optionally filtered by user
 - `get_workspace_by_id(workspace_id: str)` - Get specific workspace with member count
 - `get_workspace_members(workspace_id: str)` - Get all members of a workspace
+- `create_workspace(workspace: Dict[str, Any])` - Create a new workspace with members
 
 ### Case Functions
 - `get_cases()` - Get all cases with their document IDs
 - `get_case_by_id(case_id: str)` - Get specific case with document IDs
+- `create_case(case: Dict[str, Any])` - Create a new case
 
 ### Document Functions
 - `get_documents()` - Get all documents
 - `get_document_by_id(doc_id: str)` - Get specific document
+- `create_document(document: Dict[str, Any])` - Create a new document
+- `add_document_to_case(case_id: str, document_id: str)` - Link a document to a case
 
 ### Chunk Functions
 - `get_chunks_by_document(document_id: str)` - Get all chunks for a document (with parsed bbox)
@@ -101,7 +86,7 @@ mentions = get_chunk_stakeholders("chunk_1")
 - `get_stakeholder_by_id(stakeholder_id: str)` - Get specific stakeholder
 
 ### Chunk-Stakeholder Functions
-- `get_chunk_stakeholders(chunk_id: str)` - Get all stakeholder mentions for a chunk
+- `get_chunk_stakeholders(chunk_id: str)` - Get all stakeholder mentions for a chunk (includes stakeholder info)
 - `get_stakeholder_mentions_by_document(document_id: str)` - Get all stakeholder mentions in a document
 
 ## Database Schema
@@ -191,5 +176,7 @@ Stakeholder mentions detected in chunks (NER results).
 
 - All timestamps are in ISO 8601 format with 'Z' suffix (UTC)
 - Bounding boxes are stored as JSON strings and parsed automatically by helper functions
-- The database schema matches the structure used by the dummy data in `app.py`
+- The database schema matches the structure used in the FastAPI application
 - `init_db()` is called automatically on FastAPI startup, so you don't need to manually initialize the database
+- Create functions (`create_case`, `create_document`, `create_workspace`) handle database inserts and commits
+- All get functions return dictionaries with snake_case keys - API layer converts to camelCase
