@@ -26,7 +26,7 @@ export default function LoginPage() {
             await new Promise((resolve) => setTimeout(resolve, 500));
 
             login(username, email);
-            navigate('/workspaces', { replace: true });
+            navigate('/home', { replace: true });
         } catch (err) {
             setError('Login failed. Please try again.');
         } finally {
