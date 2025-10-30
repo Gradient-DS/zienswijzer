@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+#from .utils.text_processor import transform_text
+from db import init_db
 from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +20,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    init_db()
 
 
 # Dummy data for development
