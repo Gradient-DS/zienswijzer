@@ -1,10 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
+import shutil
+import uuid
 from .utils.text_processor import transform_text
 
 app = FastAPI(title="WOO Backend", version="0.1.0")
@@ -244,7 +246,7 @@ DUMMY_CASES = [
         "id": "case_2",
         "title": "Community Infrastructure Planning",
         "description": "Planning documentation for community infrastructure projects",
-        "documentIds": ["doc_1"],
+        "documentIds": ["doc_1", "doc_2"],
         "createdAt": "2024-01-10T09:00:00Z",
         "updatedAt": "2024-01-18T11:45:00Z",
     },
@@ -252,7 +254,7 @@ DUMMY_CASES = [
         "id": "case_3",
         "title": "Urban Development Proposal",
         "description": "Proposal for urban development in central district",
-        "documentIds": [],
+        "documentIds": ["doc_1", "doc_2"],
         "createdAt": "2024-01-22T08:00:00Z",
         "updatedAt": "2024-01-22T08:00:00Z",
     },
@@ -727,6 +729,72 @@ def get_document_chunks(document_id: str):
         )
 
     return ChunkListResponse(chunks=chunks_with_mentions)
+
+
+class UploadDocumentResponse(BaseModel):
+    document: Document
+
+
+@app.post("/documents/upload", response_model=UploadDocumentResponse)
+async def upload_document(case_id: str, file: UploadFile = File(...)):
+    """Upload a PDF document to a case"""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    # Find the case
+    case = None
+    for c in DUMMY_CASES:
+        if c["id"] == case_id:
+            case = c
+            break
+
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    # Create data directory if it doesn't exist
+    data_dir = Path(__file__).parent / "data"
+    data_dir.mkdir(exist_ok=True)
+
+    # Generate unique document ID
+    doc_id = f"doc_{uuid.uuid4().hex[:8]}"
+
+    # Save file
+    file_path = data_dir / f"{doc_id}_{file.filename}"
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # Get file size
+    file_size = file_path.stat().st_size
+
+    # Create document record
+    now = datetime.now().isoformat() + "Z"
+    new_document = {
+        "id": doc_id,
+        "title": file.filename,
+        "description": f"Uploaded document: {file.filename}",
+        "type": "document",
+        "filePath": str(file_path.relative_to(Path(__file__).parent)),
+        "fileSize": file_size,
+        "pageCount": 1,  # Would need PDF parsing to get actual page count
+        "processingStatus": "completed",
+        "uploadedAt": now,
+        "processedAt": now,
+        "createdAt": now,
+        "updatedAt": now,
+    }
+
+    # Add to dummy documents list
+    DUMMY_DOCUMENTS.append(new_document)
+
+    # Add to case
+    if doc_id not in case["documentIds"]:
+        case["documentIds"].append(doc_id)
+        case["updatedAt"] = now
+
+    return UploadDocumentResponse(document=Document(**new_document))
 
 
 if __name__ == "__main__":

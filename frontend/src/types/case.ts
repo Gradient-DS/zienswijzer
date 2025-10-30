@@ -14,9 +14,16 @@ export interface CaseDetail extends Case {
 export interface Document {
     id: string;
     title: string;
-    content?: string;
+    description?: string;
+    type?: string;
+    filePath?: string;
+    fileSize?: number;
+    pageCount?: number;
+    processingStatus?: 'pending' | 'processing' | 'completed' | 'failed';
+    uploadedAt?: string;
+    processedAt?: string;
     createdAt: string;
     updatedAt: string;
-    authorId: string;
+    pdfUrl?: string;
 }
 
