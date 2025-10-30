@@ -3,27 +3,57 @@
 from .database import (
     init_db,
     get_connection,
+    # User functions
     get_users,
+    get_user_by_id,
     get_user_by_email,
-    create_user,
-    get_woo_cases,
-    get_woo_case_by_id,
+    get_user_by_username,
+    # Workspace functions
+    get_workspaces,
+    get_workspace_by_id,
+    get_workspace_members,
+    # Case functions
+    get_cases,
+    get_case_by_id,
+    # Document functions
     get_documents,
     get_document_by_id,
+    # Chunk functions
+    get_chunks_by_document,
+    get_chunk_by_id,
+    # Stakeholder functions
     get_stakeholders,
+    get_stakeholder_by_id,
+    # Chunk-Stakeholder functions
+    get_chunk_stakeholders,
+    get_stakeholder_mentions_by_document,
 )
 
 __all__ = [
     "init_db",
     "get_connection",
+    # User functions
     "get_users",
+    "get_user_by_id",
     "get_user_by_email",
-    "create_user",
-    "get_woo_cases",
-    "get_woo_case_by_id",
+    "get_user_by_username",
+    # Workspace functions
+    "get_workspaces",
+    "get_workspace_by_id",
+    "get_workspace_members",
+    # Case functions
+    "get_cases",
+    "get_case_by_id",
+    # Document functions
     "get_documents",
     "get_document_by_id",
+    # Chunk functions
+    "get_chunks_by_document",
+    "get_chunk_by_id",
+    # Stakeholder functions
     "get_stakeholders",
+    "get_stakeholder_by_id",
+    # Chunk-Stakeholder functions
+    "get_chunk_stakeholders",
+    "get_stakeholder_mentions_by_document",
 ]
-
-
