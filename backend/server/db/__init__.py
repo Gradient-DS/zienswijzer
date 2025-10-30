@@ -12,12 +12,16 @@ from .database import (
     get_workspaces,
     get_workspace_by_id,
     get_workspace_members,
+    create_workspace,
     # Case functions
     get_cases,
     get_case_by_id,
+    create_case,
     # Document functions
     get_documents,
     get_document_by_id,
+    create_document,
+    add_document_to_case,
     # Chunk functions
     get_chunks_by_document,
     get_chunk_by_id,
@@ -41,12 +45,16 @@ __all__ = [
     "get_workspaces",
     "get_workspace_by_id",
     "get_workspace_members",
+    "create_workspace",
     # Case functions
     "get_cases",
     "get_case_by_id",
+    "create_case",
     # Document functions
     "get_documents",
     "get_document_by_id",
+    "create_document",
+    "add_document_to_case",
     # Chunk functions
     "get_chunks_by_document",
     "get_chunk_by_id",
