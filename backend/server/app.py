@@ -592,6 +592,8 @@ def create_case(request: CreateCaseRequest):
         "updatedAt": datetime.now().isoformat() + "Z",
     }
 
+    DUMMY_CASES.append(new_case)
+
     return CreateCaseResponse(case=Case(**new_case))
 
 

@@ -106,7 +106,7 @@ export function Sidebar({ selectedCaseId, onCaseSelect, onClose, isMobile = fals
                 <div className="space-y-1">
                     <Button
                         variant="ghost"
-                        className="w-full justify-start gap-2"
+                        className="w-full justify-start gap-2 h-8 pl-2"
                         onClick={handleNewCase}
                     >
                         <Plus className="h-4 w-4" />
@@ -114,7 +114,7 @@ export function Sidebar({ selectedCaseId, onCaseSelect, onClose, isMobile = fals
                     </Button>
                     <Button
                         variant="ghost"
-                        className="w-full justify-start gap-2"
+                        className="w-full justify-start gap-2 h-8 pl-2"
                     >
                         <Bell className="h-4 w-4" />
                         Notificaties
