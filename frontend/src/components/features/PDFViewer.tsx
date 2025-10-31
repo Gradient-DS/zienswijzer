@@ -15,6 +15,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 interface PDFViewerProps {
     documentId: string;
     className?: string;
+    onNextDocument?: () => void;
+    allDocuments?: Array<{ id: string; chunks?: any[] }>;
+    onNavigateToNextStep?: () => void;
 }
 
 interface PageDimensions {
@@ -22,7 +25,7 @@ interface PageDimensions {
     height: number;
 }
 
-export function PDFViewer({ documentId, className }: PDFViewerProps) {
+export function PDFViewer({ documentId, className, onNextDocument, allDocuments, onNavigateToNextStep }: PDFViewerProps) {
     const [numPages, setNumPages] = useState<number>(0);
     const [scale, setScale] = useState<number>(1);
     const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -33,7 +36,7 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
     const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
     const { id: caseId } = useParams<{ id: string }>();
 
-    const { data: document, isLoading: documentLoading } = useDocument(documentId);
+    const { data: document, isLoading: documentLoading } = useDocument(documentId, caseId);
     const pdfUrl = getDocumentPdfUrl(documentId);
     const { isChunkSidebarOpen, setChunkSidebarOpen } = useUIStore();
 
@@ -136,14 +139,17 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
 
     if (documentLoading) {
         return (
-            <div className={`flex items-center justify-center h-full ${className || ''}`}>
-                <div className="text-gray-500">PDF laden...</div>
+            <div className={`flex items-center justify-center h-full transition-opacity duration-300 ${className || ''}`}>
+                <div className="flex flex-col items-center gap-3">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    <div className="text-gray-500 text-sm">PDF laden...</div>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className={`flex flex-col h-full ${className || ''}`}>
+        <div className={`flex flex-col h-full transition-opacity duration-300 ${className || ''}`}>
             <div className="flex-1 flex overflow-hidden bg-gray-100">
                 <div
                     className="flex-1 overflow-auto pdf-container"
@@ -216,6 +222,9 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
                             setSelectedMentionId(null);
                         }}
                         caseId={caseId}
+                        onNextDocument={onNextDocument}
+                        allDocuments={allDocuments}
+                        onNavigateToNextStep={onNavigateToNextStep}
                     />
                 )}
             </div>

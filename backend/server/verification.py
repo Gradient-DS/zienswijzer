@@ -17,6 +17,7 @@ class VerifyMentionRequest(BaseModel):
     """Request to verify a single mention"""
 
     verified: bool = True
+    case_id: Optional[str] = None
 
 
 class BulkVerifyRequest(BaseModel):
@@ -48,25 +49,35 @@ class BulkVerifyResponse(BaseModel):
 @verification_router.post("/mention/{mention_id}", response_model=VerifyMentionResponse)
 def verify_mention(mention_id: str, request: VerifyMentionRequest):
     """
-    Verify or unverify a single chunk stakeholder mention.
+    Verify or unverify a single chunk stakeholder mention for a specific case.
 
     Args:
         mention_id: ChunkStakeholder ID
-        request: Verification request with verified flag
+        request: Verification request with verified flag and case_id
 
     Returns:
         Success status and updated mention info
     """
     try:
+        if not request.case_id:
+            raise HTTPException(status_code=400, detail="case_id is required")
+
         # Get the mention to verify it exists
         mention = db.get_chunk_stakeholders_by_id(mention_id)
         if not mention:
             raise HTTPException(status_code=404, detail="Mention not found")
 
-        # Update verification status
-        db.update_chunk_stakeholder_verified(mention_id, request.verified)
+        # Verify case exists
+        case = db.get_case_by_id(request.case_id)
+        if not case:
+            raise HTTPException(status_code=404, detail="Case not found")
 
-        logger.info(f"Updated verification status for mention {mention_id}: {request.verified}")
+        # Update verification status per case
+        db.set_case_mention_verification(request.case_id, mention_id, request.verified)
+
+        logger.info(
+            f"Updated verification status for mention {mention_id} in case {request.case_id}: {request.verified}"
+        )
 
         return VerifyMentionResponse(
             success=True,
@@ -124,8 +135,8 @@ def bulk_verify_mentions(request: BulkVerifyRequest):
                         continue
                     # "all" includes everything regardless of confidence
 
-                    # Update verification status
-                    db.update_chunk_stakeholder_verified(cs["id"], request.verified)
+                    # Update verification status per case
+                    db.set_case_mention_verification(request.case_id, cs["id"], request.verified)
                     verified_count += 1
 
         logger.info(
