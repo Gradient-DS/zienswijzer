@@ -9,15 +9,27 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import msal
 import requests
 import logging
 import base64
+import uuid
 from pathlib import Path
 
 from .config import email_config
-from ..db.database import get_oauth_token, save_oauth_token, delete_oauth_token
+from ..db.database import (
+    get_oauth_token, 
+    save_oauth_token, 
+    delete_oauth_token,
+    save_sent_email,
+    get_sent_emails,
+    get_sent_email_by_id,
+    get_sent_email_by_conversation_id,
+    save_email_reply,
+    get_email_replies,
+    get_email_reply_by_outlook_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +136,91 @@ class TokenStatusResponse(BaseModel):
     hasToken: bool
     email: Optional[str] = None
     expiresAt: Optional[str] = None
+
+
+class SentEmail(BaseModel):
+    """Model for a sent email"""
+    id: str
+    userId: str
+    subject: str
+    body: str
+    bodyType: str
+    toRecipients: List[EmailAddress]
+    ccRecipients: Optional[List[EmailAddress]] = None
+    bccRecipients: Optional[List[EmailAddress]] = None
+    importance: str
+    outlookMessageId: Optional[str] = None
+    outlookConversationId: Optional[str] = None
+    trackingId: Optional[str] = None
+    sentAt: str
+    caseId: Optional[str] = None
+    createdAt: str
+
+
+class EmailReply(BaseModel):
+    """Model for an email reply"""
+    id: str
+    sentEmailId: str
+    outlookMessageId: str
+    fromAddress: EmailAddress
+    subject: str
+    bodyPreview: str
+    body: Optional[str] = None
+    bodyType: str
+    receivedAt: str
+    isRead: bool
+    hasAttachments: bool
+    importance: str
+    createdAt: str
+    updatedAt: str
+
+
+class SentEmailDetail(BaseModel):
+    """Model for a sent email with its replies"""
+    id: str
+    userId: str
+    subject: str
+    body: str
+    bodyType: str
+    toRecipients: List[EmailAddress]
+    ccRecipients: Optional[List[EmailAddress]] = None
+    bccRecipients: Optional[List[EmailAddress]] = None
+    importance: str
+    outlookMessageId: Optional[str] = None
+    outlookConversationId: Optional[str] = None
+    trackingId: Optional[str] = None
+    sentAt: str
+    caseId: Optional[str] = None
+    createdAt: str
+    replies: List[EmailReply]
+
+
+class SentEmailListResponse(BaseModel):
+    """Response model for list of sent emails"""
+    emails: List[SentEmail]
+    total: int
+
+
+class SyncRepliesResponse(BaseModel):
+    """Response model for syncing replies"""
+    success: bool
+    message: str
+    newReplies: int
+    updatedReplies: int
+
+
+class AddReplyRequest(BaseModel):
+    """Request model for manually adding a reply"""
+    outlookMessageId: str
+    fromAddress: EmailAddress
+    subject: str
+    bodyPreview: str
+    body: Optional[str] = None
+    bodyType: Optional[str] = "HTML"
+    receivedAt: str
+    isRead: Optional[bool] = False
+    hasAttachments: Optional[bool] = False
+    importance: Optional[str] = "normal"
 
 
 # Helper Functions
@@ -429,21 +526,32 @@ def get_token_status(user_id: str):
 
 
 @email_router.post("/send", response_model=SendEmailResponse)
-def send_email(user_id: str, email_request: SendEmailRequest):
+def send_email(user_id: str, email_request: SendEmailRequest, case_id: Optional[str] = None):
     """
     Send an email via Microsoft Outlook.
     
     Args:
         user_id: User identifier
         email_request: Email content and recipients
+        case_id: Optional case ID to associate with this email
     
     Returns:
         Success status and message ID
     """
+    # Generate unique ID for this sent email
+    sent_email_id = f"sent_{uuid.uuid4().hex[:12]}"
+
+    # Generate tracking ID for subject line (shorter for readability)
+    tracking_id = uuid.uuid4().hex[:8].upper()
+    tracking_prefix = f"[WOO-{tracking_id}]"
+
+    # Add tracking ID to subject
+    tracked_subject = f"{tracking_prefix} {email_request.subject}"
+
     # Prepare email message
     message = {
         "message": {
-            "subject": email_request.subject,
+            "subject": tracked_subject,
             "body": {
                 "contentType": email_request.bodyType,
                 "content": email_request.body
@@ -453,7 +561,8 @@ def send_email(user_id: str, email_request: SendEmailRequest):
                 for recipient in email_request.to
             ],
             "importance": email_request.importance
-        }
+        },
+        "saveToSentItems": True  # Ensure email is saved to sent items
     }
     
     # Add CC recipients if provided
@@ -527,10 +636,64 @@ def send_email(user_id: str, email_request: SendEmailRequest):
         
         logger.info(f"Email sent successfully by user {user_id}")
         
+        # Try to retrieve the sent message from sent items to get Outlook IDs
+        outlook_message_id = None
+        outlook_conversation_id = None
+        
+        try:
+            # Wait a moment for the email to appear in sent items
+            import time
+            time.sleep(1)
+
+            # Search for the sent email by subject in sent items
+            # Use the tracked subject (with prefix) for searching
+            escaped_subject = tracked_subject.replace("'", "''")
+            sent_messages = make_graph_request(
+                user_id=user_id,
+                endpoint="me/mailFolders/sentitems/messages",
+                params={
+                    "$top": 1,
+                    "$orderby": "sentDateTime desc",
+                    "$filter": f"subject eq '{escaped_subject}'"
+                }
+            )
+            
+            if sent_messages.get("value") and len(sent_messages["value"]) > 0:
+                sent_msg = sent_messages["value"][0]
+                outlook_message_id = sent_msg.get("id")
+                outlook_conversation_id = sent_msg.get("conversationId")
+                logger.info(f"Retrieved Outlook message ID: {outlook_message_id}")
+        except Exception as e:
+            logger.warning(f"Could not retrieve sent message details: {e}")
+        
+        # Save sent email to database
+        try:
+            email_data = {
+                "id": sent_email_id,
+                "user_id": user_id,
+                "subject": email_request.subject,  # Original subject without tracking ID
+                "body": email_request.body,
+                "body_type": email_request.bodyType,
+                "to_recipients": [{"address": r.address, "name": r.name} for r in email_request.to],
+                "cc_recipients": [{"address": r.address, "name": r.name} for r in email_request.cc] if email_request.cc else None,
+                "bcc_recipients": [{"address": r.address, "name": r.name} for r in email_request.bcc] if email_request.bcc else None,
+                "importance": email_request.importance,
+                "outlook_message_id": outlook_message_id,
+                "outlook_conversation_id": outlook_conversation_id,
+                "tracking_id": tracking_id,  # Store the tracking ID for reply detection
+                "sent_at": datetime.now().isoformat(),
+                "case_id": case_id,
+            }
+            save_sent_email(email_data)
+            logger.info(f"Saved sent email to database: {sent_email_id}")
+        except Exception as e:
+            logger.error(f"Failed to save sent email to database: {e}")
+            # Don't fail the request if database save fails
+        
         return SendEmailResponse(
             success=True,
             message="Email sent successfully",
-            messageId=None  # sendMail endpoint doesn't return message ID
+            messageId=sent_email_id
         )
     
     except HTTPException:
@@ -541,7 +704,7 @@ def send_email(user_id: str, email_request: SendEmailRequest):
 
 
 @email_router.post("/send/woo", response_model=SendEmailResponse)
-def send_woo_email(user_id: str, email_request: SendWOOEmailRequest):
+def send_woo_email(user_id: str, email_request: SendWOOEmailRequest, case_id: Optional[str] = None):
     """
     Send a WOO (verzoek om inzage) email via Microsoft Outlook with template.
     
@@ -551,6 +714,7 @@ def send_woo_email(user_id: str, email_request: SendWOOEmailRequest):
     Args:
         user_id: User identifier
         email_request: WOO email request with template data
+        case_id: Optional case ID to associate with this email
     
     Returns:
         Success status and message ID
@@ -571,7 +735,7 @@ def send_woo_email(user_id: str, email_request: SendWOOEmailRequest):
     )
     
     # Use the existing send_email logic
-    return send_email(user_id, send_request)
+    return send_email(user_id, send_request, case_id=case_id)
 
 
 @email_router.get("/messages", response_model=EmailListResponse)
@@ -782,6 +946,590 @@ def revoke_access(user_id: str):
         return {"success": True, "message": "Email access revoked"}
     
     return {"success": True, "message": "No access to revoke"}
+
+
+# ---------------------
+# Sent Email Tracking Endpoints
+# ---------------------
+
+@email_router.get("/sent", response_model=SentEmailListResponse)
+def get_sent_emails_list(user_id: Optional[str] = None, case_id: Optional[str] = None):
+    """
+    Get list of sent emails, optionally filtered by user_id or case_id.
+    
+    Args:
+        user_id: Optional user identifier to filter by
+        case_id: Optional case identifier to filter by
+    
+    Returns:
+        List of sent emails
+    """
+    try:
+        emails_data = get_sent_emails(user_id=user_id, case_id=case_id)
+        
+        emails = []
+        for email_data in emails_data:
+            emails.append(SentEmail(
+                id=email_data["id"],
+                userId=email_data["user_id"],
+                subject=email_data["subject"],
+                body=email_data["body"],
+                bodyType=email_data["body_type"],
+                toRecipients=[EmailAddress(**r) for r in email_data["to_recipients"]],
+                ccRecipients=[EmailAddress(**r) for r in email_data["cc_recipients"]] if email_data.get("cc_recipients") else None,
+                bccRecipients=[EmailAddress(**r) for r in email_data["bcc_recipients"]] if email_data.get("bcc_recipients") else None,
+                importance=email_data["importance"],
+                outlookMessageId=email_data.get("outlook_message_id"),
+                outlookConversationId=email_data.get("outlook_conversation_id"),
+                trackingId=email_data.get("tracking_id"),
+                sentAt=email_data["sent_at"],
+                caseId=email_data.get("case_id"),
+                createdAt=email_data["created_at"]
+            ))
+        
+        logger.info(f"Retrieved {len(emails)} sent emails")
+        
+        return SentEmailListResponse(
+            emails=emails,
+            total=len(emails)
+        )
+    
+    except Exception as e:
+        logger.error(f"Failed to retrieve sent emails: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve sent emails: {str(e)}")
+
+
+@email_router.get("/sent/{email_id}", response_model=SentEmailDetail)
+def get_sent_email_detail(email_id: str):
+    """
+    Get detailed information about a sent email including all replies.
+    
+    Args:
+        email_id: Sent email identifier
+    
+    Returns:
+        Detailed sent email information with replies
+    """
+    try:
+        email_data = get_sent_email_by_id(email_id)
+        if not email_data:
+            raise HTTPException(status_code=404, detail="Sent email not found")
+        
+        # Get replies for this email
+        replies_data = get_email_replies(email_id)
+        
+        replies = []
+        for reply_data in replies_data:
+            replies.append(EmailReply(
+                id=reply_data["id"],
+                sentEmailId=reply_data["sent_email_id"],
+                outlookMessageId=reply_data["outlook_message_id"],
+                fromAddress=EmailAddress(**reply_data["from_address"]),
+                subject=reply_data["subject"],
+                bodyPreview=reply_data["body_preview"],
+                body=reply_data.get("body"),
+                bodyType=reply_data["body_type"],
+                receivedAt=reply_data["received_at"],
+                isRead=reply_data["is_read"],
+                hasAttachments=reply_data["has_attachments"],
+                importance=reply_data["importance"],
+                createdAt=reply_data["created_at"],
+                updatedAt=reply_data["updated_at"]
+            ))
+        
+        sent_email = SentEmailDetail(
+            id=email_data["id"],
+            userId=email_data["user_id"],
+            subject=email_data["subject"],
+            body=email_data["body"],
+            bodyType=email_data["body_type"],
+            toRecipients=[EmailAddress(**r) for r in email_data["to_recipients"]],
+            ccRecipients=[EmailAddress(**r) for r in email_data["cc_recipients"]] if email_data.get("cc_recipients") else None,
+            bccRecipients=[EmailAddress(**r) for r in email_data["bcc_recipients"]] if email_data.get("bcc_recipients") else None,
+            importance=email_data["importance"],
+            outlookMessageId=email_data.get("outlook_message_id"),
+            outlookConversationId=email_data.get("outlook_conversation_id"),
+            trackingId=email_data.get("tracking_id"),
+            sentAt=email_data["sent_at"],
+            caseId=email_data.get("case_id"),
+            createdAt=email_data["created_at"],
+            replies=replies
+        )
+        
+        logger.info(f"Retrieved sent email {email_id} with {len(replies)} replies")
+        
+        return sent_email
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to retrieve sent email details: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve sent email details: {str(e)}")
+
+
+@email_router.post("/sent/{email_id}/sync-replies", response_model=SyncRepliesResponse)
+def sync_email_replies(email_id: str):
+    """
+    Sync replies from Outlook for a specific sent email.
+    
+    This endpoint fetches new replies from Outlook based on the conversation ID
+    and saves them to the database.
+    
+    Args:
+        email_id: Sent email identifier
+    
+    Returns:
+        Sync status with counts of new and updated replies
+    """
+    try:
+        # Get the sent email
+        email_data = get_sent_email_by_id(email_id)
+        if not email_data:
+            raise HTTPException(status_code=404, detail="Sent email not found")
+        
+        conversation_id = email_data.get("outlook_conversation_id")
+        user_id = email_data["user_id"]
+        original_subject = email_data.get("subject", "")
+
+        # Will be set if we find a conversation from inbox replies
+        found_conversation_id = None
+
+        if conversation_id:
+            # Use conversation ID to find replies (preferred method)
+            try:
+                messages = make_graph_request(
+                    user_id=user_id,
+                    endpoint="me/messages",
+                    params={
+                        "$filter": f"conversationId eq '{conversation_id}'",
+                        "$orderby": "receivedDateTime asc",
+                        "$select": "id,subject,bodyPreview,body,from,receivedDateTime,isRead,hasAttachments,importance"
+                    }
+                )
+            except HTTPException as e:
+                # Handle authentication/authorization errors gracefully
+                if e.status_code in (401, 403):
+                    logger.info(f"User {user_id} not authenticated for Outlook access - cannot sync replies")
+                    return SyncRepliesResponse(
+                        success=True,
+                        message="Cannot sync replies: user not authenticated with Outlook. Please authorize email access first.",
+                        newReplies=0,
+                        updatedReplies=0
+                    )
+                else:
+                    logger.warning(f"Graph API error while syncing conversation: {e.detail}")
+                    return SyncRepliesResponse(
+                        success=True,
+                        message=f"Could not sync replies: {e.detail}",
+                        newReplies=0,
+                        updatedReplies=0
+                    )
+            except Exception as e:
+                logger.warning(f"Unexpected error while syncing conversation: {e}")
+                return SyncRepliesResponse(
+                    success=True,
+                    message="Could not sync replies (unexpected error)",
+                    newReplies=0,
+                    updatedReplies=0
+                )
+        else:
+            # No conversation ID - search for emails containing the tracking ID
+            try:
+                tracking_id = email_data.get("tracking_id")
+                if not tracking_id:
+                    logger.warning(f"Email {email_id} has no tracking ID - cannot search for replies")
+                    return SyncRepliesResponse(
+                        success=True,
+                        message="Cannot sync replies: email has no tracking ID",
+                        newReplies=0,
+                        updatedReplies=0
+                    )
+
+                tracking_tag = f"[WOO-{tracking_id}]"
+                logger.info(f"Searching for emails containing tracking tag: {tracking_tag}")
+
+                # Search inbox for emails containing the tracking tag
+                inbox_params = {
+                    "$orderby": "receivedDateTime desc",
+                    "$select": "id,conversationId,subject,bodyPreview,body,from,receivedDateTime,isRead,hasAttachments,importance",
+                    "$top": 200  # Get more emails to find all replies
+                }
+
+                # Use a simple search - we'll filter for the tracking tag in code
+                inbox_messages = make_graph_request(
+                    user_id=user_id,
+                    endpoint="me/mailFolders/inbox/messages",
+                    params=inbox_params
+                )
+
+                # Find all emails that contain the tracking tag in their subject
+                conversation_messages = []
+                inbox_count = len(inbox_messages.get("value", []))
+
+                for msg in inbox_messages.get("value", []):
+                    msg_subject = msg.get("subject", "")
+                    if tracking_tag in msg_subject:
+                        conversation_messages.append(msg)
+                        logger.info(f"Found email in conversation: '{msg_subject}'")
+
+                if not conversation_messages:
+                    logger.info(f"No emails found with tracking tag {tracking_tag} in {inbox_count} inbox messages")
+                    return SyncRepliesResponse(
+                        success=True,
+                        message=f"No emails found with tracking ID {tracking_id}. Checked {inbox_count} inbox messages.",
+                        newReplies=0,
+                        updatedReplies=0
+                    )
+
+                # Sort messages by received time (oldest first)
+                conversation_messages.sort(key=lambda x: x.get("receivedDateTime", ""))
+
+                # Use the messages we found as the conversation
+                messages = {"value": conversation_messages}
+                logger.info(f"Found {len(conversation_messages)} emails in tracked conversation {tracking_id}")
+
+            except HTTPException as e:
+                # Handle authentication/authorization errors gracefully
+                if e.status_code in (401, 403):
+                    logger.info(f"User {user_id} not authenticated for Outlook access - cannot sync replies")
+                    return SyncRepliesResponse(
+                        success=True,
+                        message="Cannot sync replies: user not authenticated with Outlook. Please authorize email access first.",
+                        newReplies=0,
+                        updatedReplies=0
+                    )
+                else:
+                    logger.warning(f"Graph API error while searching for tracking ID: {e.detail}")
+                    return SyncRepliesResponse(
+                        success=True,
+                        message=f"Could not search for replies: {e.detail}",
+                        newReplies=0,
+                        updatedReplies=0
+                    )
+            except Exception as e:
+                logger.warning(f"Unexpected error while searching for tracking ID: {e}")
+                return SyncRepliesResponse(
+                    success=True,
+                    message="Could not search for replies (unexpected error)",
+                    newReplies=0,
+                    updatedReplies=0
+                )
+        
+        new_replies = 0
+        updated_replies = 0
+
+        # Process each message in the conversation
+        for msg in messages.get("value", []):
+            msg_id = msg.get("id")
+            
+            # Skip if this is the original sent message
+            if msg_id == email_data.get("outlook_message_id"):
+                continue
+            
+            # Check if reply already exists
+            existing_reply = get_email_reply_by_outlook_id(msg_id)
+            
+            from_addr = msg.get("from", {}).get("emailAddress", {})
+            body_content = msg.get("body", {})
+            
+            reply_data = {
+                "id": f"reply_{uuid.uuid4().hex[:12]}",
+                "sent_email_id": email_id,
+                "outlook_message_id": msg_id,
+                "from_address": {
+                    "address": from_addr.get("address", ""),
+                    "name": from_addr.get("name")
+                },
+                "subject": msg.get("subject", ""),
+                "body_preview": msg.get("bodyPreview", ""),
+                "body": body_content.get("content", ""),
+                "body_type": body_content.get("contentType", "HTML"),
+                "received_at": msg.get("receivedDateTime", ""),
+                "is_read": msg.get("isRead", False),
+                "has_attachments": msg.get("hasAttachments", False),
+                "importance": msg.get("importance", "normal")
+            }
+            
+            if existing_reply:
+                updated_replies += 1
+            else:
+                new_replies += 1
+            
+            save_email_reply(reply_data)
+        
+        logger.info(f"Synced replies for email {email_id}: {new_replies} new, {updated_replies} updated")
+        
+        return SyncRepliesResponse(
+            success=True,
+            message=f"Successfully synced replies: {new_replies} new, {updated_replies} updated",
+            newReplies=new_replies,
+            updatedReplies=updated_replies
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to sync email replies: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to sync email replies: {str(e)}")
+
+
+@email_router.post("/sent/sync-all-replies", response_model=SyncRepliesResponse)
+def sync_all_email_replies(user_id: str):
+    """
+    Sync replies from Outlook for all sent emails by a user.
+    
+    This endpoint fetches new replies from Outlook for all sent emails
+    that have a conversation ID and saves them to the database.
+    
+    Args:
+        user_id: User identifier
+    
+    Returns:
+        Sync status with total counts of new and updated replies
+    """
+    try:
+        # Get all sent emails for this user
+        emails_data = get_sent_emails(user_id=user_id)
+        
+        total_new = 0
+        total_updated = 0
+        synced_count = 0
+        
+        for email_data in emails_data:
+            conversation_id = email_data.get("outlook_conversation_id")
+            if not conversation_id:
+                continue
+            
+            email_id = email_data["id"]
+            
+            try:
+                # Fetch messages in this conversation from Outlook
+                messages = make_graph_request(
+                    user_id=user_id,
+                    endpoint="me/messages",
+                    params={
+                        "$filter": f"conversationId eq '{conversation_id}'",
+                        "$orderby": "receivedDateTime asc",
+                        "$select": "id,subject,bodyPreview,body,from,receivedDateTime,isRead,hasAttachments,importance"
+                    }
+                )
+                
+                # Process each message in the conversation
+                for msg in messages.get("value", []):
+                    msg_id = msg.get("id")
+                    
+                    # Skip if this is the original sent message
+                    if msg_id == email_data.get("outlook_message_id"):
+                        continue
+                    
+                    # Check if reply already exists
+                    existing_reply = get_email_reply_by_outlook_id(msg_id)
+                    
+                    from_addr = msg.get("from", {}).get("emailAddress", {})
+                    body_content = msg.get("body", {})
+                    
+                    reply_data = {
+                        "id": f"reply_{uuid.uuid4().hex[:12]}",
+                        "sent_email_id": email_id,
+                        "outlook_message_id": msg_id,
+                        "from_address": {
+                            "address": from_addr.get("address", ""),
+                            "name": from_addr.get("name")
+                        },
+                        "subject": msg.get("subject", ""),
+                        "body_preview": msg.get("bodyPreview", ""),
+                        "body": body_content.get("content", ""),
+                        "body_type": body_content.get("contentType", "HTML"),
+                        "received_at": msg.get("receivedDateTime", ""),
+                        "is_read": msg.get("isRead", False),
+                        "has_attachments": msg.get("hasAttachments", False),
+                        "importance": msg.get("importance", "normal")
+                    }
+                    
+                    if existing_reply:
+                        total_updated += 1
+                    else:
+                        total_new += 1
+                    
+                    save_email_reply(reply_data)
+                
+                synced_count += 1
+                
+            except Exception as e:
+                logger.warning(f"Failed to sync replies for email {email_id}: {e}")
+                continue
+        
+        logger.info(f"Synced replies for {synced_count} emails: {total_new} new, {total_updated} updated")
+
+        return SyncRepliesResponse(
+            success=True,
+            message=f"Successfully synced {synced_count} email conversations: {total_new} new replies, {total_updated} updated",
+            newReplies=total_new,
+            updatedReplies=total_updated
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to sync all email replies: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to sync all email replies: {str(e)}")
+
+
+@email_router.get("/inbox/messages", response_model=EmailListResponse)
+def get_inbox_messages(
+    user_id: str,
+    top: int = 10,
+    filter_replies: Optional[str] = None
+):
+    """
+    Get recent inbox messages for debugging reply detection.
+
+    Args:
+        user_id: User identifier
+        top: Number of messages to return (max 50)
+        filter_replies: If provided, only show messages that start with "Re: [filter_replies]"
+
+    Returns:
+        List of inbox messages
+    """
+    try:
+        top = min(max(1, top), 50)  # Limit to reasonable range
+
+        params = {
+            "$orderby": "receivedDateTime desc",
+            "$select": "id,subject,bodyPreview,from,toRecipients,ccRecipients,receivedDateTime,isRead,hasAttachments,importance",
+            "$top": top
+        }
+
+        result = make_graph_request(
+            user_id=user_id,
+            endpoint="me/mailFolders/inbox/messages",
+            params=params
+        )
+
+        # Filter messages if requested
+        messages = result.get("value", [])
+        if filter_replies:
+            filter_subject = f"Re: {filter_replies}"
+            messages = [msg for msg in messages if msg.get("subject", "").startswith(filter_subject)]
+
+        # Convert to EmailMessage format
+        emails = []
+        for item in messages:
+            from_addr = item.get("from", {}).get("emailAddress", {})
+            to_recipients = [
+                EmailAddress(
+                    address=r.get("emailAddress", {}).get("address", ""),
+                    name=r.get("emailAddress", {}).get("name")
+                )
+                for r in item.get("toRecipients", [])
+            ]
+            cc_recipients = [
+                EmailAddress(
+                    address=r.get("emailAddress", {}).get("address", ""),
+                    name=r.get("emailAddress", {}).get("name")
+                )
+                for r in item.get("ccRecipients", [])
+            ] if item.get("ccRecipients") else None
+
+            emails.append(EmailMessage(
+                id=item["id"],
+                subject=item.get("subject", ""),
+                bodyPreview=item.get("bodyPreview", ""),
+                from_address=EmailAddress(
+                    address=from_addr.get("address", ""),
+                    name=from_addr.get("name")
+                ),
+                toRecipients=to_recipients,
+                ccRecipients=cc_recipients,
+                receivedDateTime=item.get("receivedDateTime", ""),
+                isRead=item.get("isRead", False),
+                hasAttachments=item.get("hasAttachments", False),
+                importance=item.get("importance", "normal")
+            ))
+
+        logger.info(f"Retrieved {len(emails)} inbox messages for user {user_id}")
+
+        return EmailListResponse(
+            emails=emails,
+            nextLink=None,  # Not implementing pagination for debug endpoint
+            total=len(emails)
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to retrieve inbox messages: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve inbox messages: {str(e)}")
+
+
+@email_router.post("/sent/{email_id}/add-reply", response_model=SyncRepliesResponse)
+def add_manual_reply(email_id: str, reply_request: AddReplyRequest):
+    """
+    Manually add a reply to a sent email.
+
+    This is useful for testing or when you want to add replies that weren't
+    automatically detected by the sync process.
+
+    Args:
+        email_id: Sent email identifier
+        reply_request: Reply details
+
+    Returns:
+        Success status
+    """
+    try:
+        # Get the sent email
+        email_data = get_sent_email_by_id(email_id)
+        if not email_data:
+            raise HTTPException(status_code=404, detail="Sent email not found")
+
+        # Check if reply already exists
+        existing_reply = get_email_reply_by_outlook_id(reply_request.outlookMessageId)
+        if existing_reply:
+            return SyncRepliesResponse(
+                success=False,
+                message="Reply with this Outlook message ID already exists",
+                newReplies=0,
+                updatedReplies=0
+            )
+
+        # Create reply data
+        reply_data = {
+            "id": f"reply_{uuid.uuid4().hex[:12]}",
+            "sent_email_id": email_id,
+            "outlook_message_id": reply_request.outlookMessageId,
+            "from_address": {
+                "address": reply_request.fromAddress.address,
+                "name": reply_request.fromAddress.name
+            },
+            "subject": reply_request.subject,
+            "body_preview": reply_request.bodyPreview,
+            "body": reply_request.body,
+            "body_type": reply_request.bodyType,
+            "received_at": reply_request.receivedAt,
+            "is_read": reply_request.isRead,
+            "has_attachments": reply_request.hasAttachments,
+            "importance": reply_request.importance
+        }
+
+        # Save the reply
+        save_email_reply(reply_data)
+
+        logger.info(f"Manually added reply {reply_data['id']} to email {email_id}")
+
+        return SyncRepliesResponse(
+            success=True,
+            message="Reply added successfully",
+            newReplies=1,
+            updatedReplies=0
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to add manual reply: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to add reply: {str(e)}")
 
 
 # Export router for integration with main app

@@ -410,3 +410,245 @@ def delete_oauth_token(user_id: str) -> bool:
         cursor = connection.execute("DELETE FROM OAuthTokens WHERE user_id = ?", (user_id,))
         connection.commit()
         return cursor.rowcount > 0
+
+
+# ---------------------
+# Sent Email functions
+# ---------------------
+
+def save_sent_email(email_data: Dict[str, Any]) -> None:
+    """Save a sent email to the database."""
+    now = datetime.now().isoformat()
+
+    # Validate case_id if provided - ensure the case exists
+    case_id = email_data.get("case_id")
+    if case_id:
+        # Check if the case exists
+        cursor = get_connection().execute("SELECT id FROM Cases WHERE id = ?", (case_id,))
+        if not cursor.fetchone():
+            # Case doesn't exist, don't link it
+            case_id = None
+
+    with get_connection() as connection:
+        connection.execute("""
+            INSERT INTO SentEmails (
+                id, user_id, subject, body, body_type, to_recipients, cc_recipients,
+                bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
+                tracking_id, sent_at, case_id, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            email_data["id"],
+            email_data["user_id"],
+            email_data["subject"],
+            email_data["body"],
+            email_data.get("body_type", "HTML"),
+            json.dumps(email_data["to_recipients"]),
+            json.dumps(email_data.get("cc_recipients")) if email_data.get("cc_recipients") else None,
+            json.dumps(email_data.get("bcc_recipients")) if email_data.get("bcc_recipients") else None,
+            email_data.get("importance", "normal"),
+            email_data.get("outlook_message_id"),
+            email_data.get("outlook_conversation_id"),
+            email_data.get("tracking_id"),
+            email_data.get("sent_at", now),
+            case_id,
+            now
+        ))
+        connection.commit()
+
+
+def get_sent_emails(user_id: Optional[str] = None, case_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Get sent emails, optionally filtered by user_id or case_id."""
+    with get_connection() as connection:
+        query = """
+            SELECT id, user_id, subject, body, body_type, to_recipients, cc_recipients,
+                   bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
+                   tracking_id, sent_at, case_id, created_at
+            FROM SentEmails
+            WHERE 1=1
+        """
+        params = []
+        
+        if user_id:
+            query += " AND user_id = ?"
+            params.append(user_id)
+        
+        if case_id:
+            query += " AND case_id = ?"
+            params.append(case_id)
+        
+        query += " ORDER BY sent_at DESC"
+        
+        cursor = connection.execute(query, params)
+        emails = []
+        for row in cursor.fetchall():
+            email = dict(row)
+            # Parse JSON fields
+            email["to_recipients"] = json.loads(email["to_recipients"])
+            if email["cc_recipients"]:
+                email["cc_recipients"] = json.loads(email["cc_recipients"])
+            if email["bcc_recipients"]:
+                email["bcc_recipients"] = json.loads(email["bcc_recipients"])
+            emails.append(email)
+        
+        return emails
+
+
+def get_sent_email_by_id(email_id: str) -> Optional[Dict[str, Any]]:
+    """Get a sent email by ID."""
+    with get_connection() as connection:
+        cursor = connection.execute("""
+            SELECT id, user_id, subject, body, body_type, to_recipients, cc_recipients,
+                   bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
+                   tracking_id, sent_at, case_id, created_at
+            FROM SentEmails
+            WHERE id = ?
+        """, (email_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        
+        email = dict(row)
+        # Parse JSON fields
+        email["to_recipients"] = json.loads(email["to_recipients"])
+        if email["cc_recipients"]:
+            email["cc_recipients"] = json.loads(email["cc_recipients"])
+        if email["bcc_recipients"]:
+            email["bcc_recipients"] = json.loads(email["bcc_recipients"])
+        
+        return email
+
+
+def get_sent_email_by_conversation_id(conversation_id: str) -> Optional[Dict[str, Any]]:
+    """Get a sent email by Outlook conversation ID."""
+    with get_connection() as connection:
+        cursor = connection.execute("""
+            SELECT id, user_id, subject, body, body_type, to_recipients, cc_recipients,
+                   bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
+                   sent_at, case_id, created_at
+            FROM SentEmails
+            WHERE outlook_conversation_id = ?
+            ORDER BY sent_at DESC
+            LIMIT 1
+        """, (conversation_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        
+        email = dict(row)
+        # Parse JSON fields
+        email["to_recipients"] = json.loads(email["to_recipients"])
+        if email["cc_recipients"]:
+            email["cc_recipients"] = json.loads(email["cc_recipients"])
+        if email["bcc_recipients"]:
+            email["bcc_recipients"] = json.loads(email["bcc_recipients"])
+        
+        return email
+
+
+# ---------------------
+# Email Reply functions
+# ---------------------
+
+def save_email_reply(reply_data: Dict[str, Any]) -> None:
+    """Save an email reply to the database."""
+    now = datetime.now().isoformat()
+    with get_connection() as connection:
+        # Check if reply already exists
+        cursor = connection.execute(
+            "SELECT id FROM EmailReplies WHERE outlook_message_id = ?",
+            (reply_data["outlook_message_id"],)
+        )
+        existing = cursor.fetchone()
+        
+        if existing:
+            # Update existing reply
+            connection.execute("""
+                UPDATE EmailReplies
+                SET subject = ?, body_preview = ?, body = ?, body_type = ?,
+                    is_read = ?, has_attachments = ?, importance = ?, updated_at = ?
+                WHERE outlook_message_id = ?
+            """, (
+                reply_data["subject"],
+                reply_data.get("body_preview", ""),
+                reply_data.get("body", ""),
+                reply_data.get("body_type", "HTML"),
+                reply_data.get("is_read", 0),
+                reply_data.get("has_attachments", 0),
+                reply_data.get("importance", "normal"),
+                now,
+                reply_data["outlook_message_id"]
+            ))
+        else:
+            # Insert new reply
+            connection.execute("""
+                INSERT INTO EmailReplies (
+                    id, sent_email_id, outlook_message_id, from_address, subject,
+                    body_preview, body, body_type, received_at, is_read, has_attachments,
+                    importance, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                reply_data["id"],
+                reply_data["sent_email_id"],
+                reply_data["outlook_message_id"],
+                json.dumps(reply_data["from_address"]),
+                reply_data["subject"],
+                reply_data.get("body_preview", ""),
+                reply_data.get("body", ""),
+                reply_data.get("body_type", "HTML"),
+                reply_data["received_at"],
+                reply_data.get("is_read", 0),
+                reply_data.get("has_attachments", 0),
+                reply_data.get("importance", "normal"),
+                now,
+                now
+            ))
+        
+        connection.commit()
+
+
+def get_email_replies(sent_email_id: str) -> List[Dict[str, Any]]:
+    """Get all replies for a sent email."""
+    with get_connection() as connection:
+        cursor = connection.execute("""
+            SELECT id, sent_email_id, outlook_message_id, from_address, subject,
+                   body_preview, body, body_type, received_at, is_read, has_attachments,
+                   importance, created_at, updated_at
+            FROM EmailReplies
+            WHERE sent_email_id = ?
+            ORDER BY received_at ASC
+        """, (sent_email_id,))
+        
+        replies = []
+        for row in cursor.fetchall():
+            reply = dict(row)
+            # Parse JSON field
+            reply["from_address"] = json.loads(reply["from_address"])
+            reply["is_read"] = bool(reply["is_read"])
+            reply["has_attachments"] = bool(reply["has_attachments"])
+            replies.append(reply)
+        
+        return replies
+
+
+def get_email_reply_by_outlook_id(outlook_message_id: str) -> Optional[Dict[str, Any]]:
+    """Get an email reply by Outlook message ID."""
+    with get_connection() as connection:
+        cursor = connection.execute("""
+            SELECT id, sent_email_id, outlook_message_id, from_address, subject,
+                   body_preview, body, body_type, received_at, is_read, has_attachments,
+                   importance, created_at, updated_at
+            FROM EmailReplies
+            WHERE outlook_message_id = ?
+        """, (outlook_message_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        
+        reply = dict(row)
+        reply["from_address"] = json.loads(reply["from_address"])
+        reply["is_read"] = bool(reply["is_read"])
+        reply["has_attachments"] = bool(reply["has_attachments"])
+        
+        return reply
