@@ -233,7 +233,7 @@ def get_documents() -> List[Dict[str, Any]]:
     with get_connection() as connection:
         cursor = connection.execute(
             """
-            SELECT id, title, description, type, keywords, author, file_path, file_size, page_count,
+            SELECT id, title, description, type, keywords, author, file_path, markdown_path, file_size, page_count,
                    parse_status, created_at, updated_at
             FROM Documents
             ORDER BY created_at DESC
@@ -247,7 +247,7 @@ def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
     with get_connection() as connection:
         cursor = connection.execute(
             """
-            SELECT id, title, description, type, keywords, author, file_path, file_size, page_count,
+            SELECT id, title, description, type, keywords, author, file_path, markdown_path, file_size, page_count,
                    parse_status, created_at, updated_at
             FROM Documents
             WHERE id = ?
@@ -263,8 +263,8 @@ def create_document(document: Dict[str, Any]) -> None:
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO Documents (id, title, description, type, keywords, author, file_path, file_size, page_count, parse_status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO Documents (id, title, description, type, keywords, author, file_path, markdown_path, file_size, page_count, parse_status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 document["id"],
@@ -274,6 +274,7 @@ def create_document(document: Dict[str, Any]) -> None:
                 document["keywords"],
                 document["author"],
                 document["file_path"],
+                document["markdown_path"],
                 document["file_size"],
                 document["page_count"],
                 document["created_at"],
@@ -300,9 +301,8 @@ def update_document(doc_id: str, document: Dict[str, Any]) -> None:
     """Update a document."""
     with get_connection() as connection:
         connection.execute("""
-            UPDATE Documents SET title = ?, description = ?, type = ?, file_path = ?, file_size = ?, page_count = ?, parse_status = ?, created_at = ?, updated_at = ?
-            WHERE id = ?
-        """, (document["title"], document["description"], document["type"], document["file_path"], document["file_size"], document["page_count"], document["parse_status"], document["created_at"], document["updated_at"], doc_id))
+            UPDATE Documents SET title = ?, description = ?, type = ?, keywords = ?, author = ?, file_path = ?, markdown_path = ?, file_size = ?, page_count = ?, parse_status = ?, created_at = ?, updated_at = ? WHERE id = ?
+        """, (document["title"], document["description"], document["type"], document["keywords"], document["author"], document["file_path"], document["markdown_path"], document["file_size"], document["page_count"], document["parse_status"], document["created_at"], document["updated_at"], doc_id))
         connection.commit()
 # ---------------------
 # Chunk functions

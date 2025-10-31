@@ -16,6 +16,11 @@ dependencies = [
     "python-multipart>=0.0.20",
     "langchain-core>=0.1.0",
     "langchain-pymupdf4llm>=0.1.0",
+    "PyMuPDF==1.26.5",
+    "spacy==3.8.7",
+    "transformers==4.57.1",
+    "sentencepiece==0.2.1",
+    "flair==0.15.1",
 ]
 
 [project.optional-dependencies]
