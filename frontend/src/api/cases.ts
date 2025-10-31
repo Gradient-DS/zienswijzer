@@ -121,3 +121,49 @@ export const useDocumentCompletionStatus = (caseId: string | undefined) => {
     });
 };
 
+export interface ObjectedChunk {
+    chunk_id: string;
+    document_id: string;
+    document_title: string;
+    page: number;
+    context: string;
+    stakeholder_id: string;
+    stakeholder_name: string;
+}
+
+export interface DocumentStatus {
+    document_id: string;
+    document_title: string;
+    is_ok: boolean;
+    objected_chunks: ObjectedChunk[];
+}
+
+export interface StakeholderResponse {
+    stakeholder_id: string;
+    stakeholder_name: string;
+    publication_status: string | null;
+    has_replied: boolean;
+}
+
+export interface CaseOverview {
+    case_id: string;
+    case_title: string;
+    documents: DocumentStatus[];
+    stakeholders: StakeholderResponse[];
+    total_documents: number;
+    total_objected_chunks: number;
+    all_stakeholders_responded: boolean;
+}
+
+export const useCaseOverview = (caseId: string | undefined) => {
+    return useQuery({
+        queryKey: ['cases', caseId, 'overview'],
+        queryFn: async () => {
+            if (!caseId) return null;
+            const res = await apiClient.get<CaseOverview>(`/cases/${caseId}/overview`);
+            return res.data;
+        },
+        enabled: !!caseId,
+    });
+};
+
