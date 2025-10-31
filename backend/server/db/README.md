@@ -89,6 +89,11 @@ mentions = get_chunk_stakeholders("chunk_1")
 - `get_chunk_stakeholders(chunk_id: str)` - Get all stakeholder mentions for a chunk (includes stakeholder info)
 - `get_stakeholder_mentions_by_document(document_id: str)` - Get all stakeholder mentions in a document
 
+### OAuth Token Functions
+- `get_oauth_token(user_id: str)` - Get OAuth token for a user
+- `save_oauth_token(user_id: str, access_token: str, refresh_token: Optional[str], expires_at: float)` - Save or update OAuth token
+- `delete_oauth_token(user_id: str)` - Delete OAuth token for a user
+
 ## Database Schema
 
 The database uses the following tables:
@@ -171,6 +176,17 @@ Stakeholder mentions detected in chunks (NER results).
 - `mention_bbox` (TEXT) - JSON: bounding box of the mention
 - `verified` (INTEGER) - Boolean: has the mention been verified?
 - `created_at` (TEXT)
+
+### OAuthTokens
+OAuth tokens for email integration (Microsoft Graph API).
+- `user_id` (TEXT, PK) - User identifier (no FK constraint for flexibility)
+- `access_token` (TEXT) - OAuth access token
+- `refresh_token` (TEXT) - OAuth refresh token
+- `expires_at` (REAL) - Unix timestamp when token expires
+- `created_at` (TEXT)
+- `updated_at` (TEXT)
+
+**Note:** No foreign key constraint to Users table to allow the email module to work independently with any user_id string.
 
 ## Notes
 
