@@ -6,9 +6,10 @@ interface DocumentListProps {
     documents: Document[];
     selectedDocumentId?: string;
     onSelectDocument: (documentId: string) => void;
+    disabled?: boolean;
 }
 
-export function DocumentList({ documents, selectedDocumentId, onSelectDocument }: DocumentListProps) {
+export function DocumentList({ documents, selectedDocumentId, onSelectDocument, disabled = false }: DocumentListProps) {
     if (documents.length === 0) {
         return (
             <div className="text-center py-8 text-muted-foreground">
@@ -23,12 +24,17 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument }
                 <div
                     key={document.id}
                     className={cn(
-                        'flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer transition-colors',
-                        selectedDocumentId === document.id
+                        'flex items-center gap-2 px-2 py-2 rounded-md transition-colors',
+                        disabled
+                            ? 'cursor-not-allowed opacity-60'
+                            : 'cursor-pointer',
+                        !disabled && selectedDocumentId === document.id
                             ? 'bg-gray-200 text-gray-900'
-                            : 'hover:bg-gray-100 text-gray-700'
+                            : !disabled
+                                ? 'hover:bg-gray-100 text-gray-700'
+                                : 'text-gray-500'
                     )}
-                    onClick={() => onSelectDocument(document.id)}
+                    onClick={() => !disabled && onSelectDocument(document.id)}
                 >
                     <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     <div className="flex-1 min-w-0">
@@ -36,20 +42,20 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument }
                             {document.title}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
-                            {document.pageCount && (
+                            {document.page_count && (
                                 <span className="text-xs text-muted-foreground">
-                                    {document.pageCount} pagina{document.pageCount !== 1 ? "'s" : ''}
+                                    {document.page_count} pagina{document.page_count !== 1 ? "'s" : ''}
                                 </span>
                             )}
-                            {document.processingStatus && (
+                            {document.parse_status && (
                                 <span className={cn(
                                     'px-1.5 py-0.5 rounded text-xs font-medium',
-                                    document.processingStatus === 'completed' && 'bg-green-100 text-green-800',
-                                    document.processingStatus === 'processing' && 'bg-yellow-100 text-yellow-800',
-                                    document.processingStatus === 'pending' && 'bg-gray-100 text-gray-800',
-                                    document.processingStatus === 'failed' && 'bg-red-100 text-red-800'
+                                    document.parse_status === 'completed' && 'bg-green-100 text-green-800',
+                                    document.parse_status === 'processing' && 'bg-yellow-100 text-yellow-800',
+                                    document.parse_status === 'pending' && 'bg-gray-100 text-gray-800',
+                                    document.parse_status === 'failed' && 'bg-red-100 text-red-800'
                                 )}>
-                                    {document.processingStatus}
+                                    {document.parse_status}
                                 </span>
                             )}
                         </div>

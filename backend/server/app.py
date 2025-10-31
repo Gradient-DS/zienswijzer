@@ -2,7 +2,8 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-#from .utils.text_processor import transform_text
+
+# from .utils.text_processor import transform_text
 from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
@@ -36,6 +37,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.on_event("startup")
 def on_startup() -> None:
@@ -190,10 +192,14 @@ class StakeholderMention(BaseModel):
     stakeholder_id: str
     stakeholder: Stakeholder
     confidence: float
-    mentionText: str
-    mentionBbox: BoundingBox
+    mention_text: str
+    mention_bbox: BoundingBox
     verified: bool
     created_at: str
+
+
+class StakeholderListResponse(BaseModel):
+    stakeholders: List[Stakeholder]
 
 
 class Chunk(BaseModel):
@@ -210,7 +216,7 @@ class ChunkDetail(BaseModel):
     page: int
     context: str
     bbox: BoundingBox
-    stakeholderMentions: List[StakeholderMention]
+    stakeholder_mentions: List[StakeholderMention]
 
 
 class ChunkListResponse(BaseModel):
@@ -223,15 +229,15 @@ class DocumentDetail(BaseModel):
     description: Optional[str] = None
     type: Optional[str] = None
     file_path: Optional[str] = None
-    fileSize: Optional[int] = None
-    pageCount: Optional[int] = None
-    processingStatus: Optional[str] = None
+    file_size: Optional[int] = None
+    page_count: Optional[int] = None
+    parse_status: Optional[str] = None
     uploaded_at: Optional[str] = None
     processed_at: Optional[str] = None
     created_at: str
     updated_at: str
     chunks: List[ChunkDetail]
-    pdfUrl: Optional[str] = None
+    pdf_url: Optional[str] = None
 
 
 @app.get("/health")
@@ -258,7 +264,7 @@ def login(request: LoginRequest):
     logger.info(f"User: {user}")
     if not user:
         user = db.get_user_by_email(request.email)
-    
+
     if not user:
         # Create a dummy user for any login attempt
         user = {
@@ -296,15 +302,17 @@ def get_workspaces():
     workspaces = []
     logger.info(f"Workspaces: {workspaces_data}")
     for ws in workspaces_data:
-        workspaces.append(Workspace(
-            id=ws["id"],
-            name=ws["name"],
-            description=ws.get("description", ""),
-            created_at=ws["created_at"],
-            updated_at=ws["updated_at"],
-            member_count=ws["member_count"],
-            is_owner=bool(ws.get("is_owner", 0))
-        ))
+        workspaces.append(
+            Workspace(
+                id=ws["id"],
+                name=ws["name"],
+                description=ws.get("description", ""),
+                created_at=ws["created_at"],
+                updated_at=ws["updated_at"],
+                member_count=ws["member_count"],
+                is_owner=bool(ws.get("is_owner", 0)),
+            )
+        )
     return WorkspaceListResponse(workspaces=workspaces)
 
 
@@ -336,22 +344,24 @@ def get_workspace_detail(workspace_id: str):
     # Get workspace members
     members_data = db.get_workspace_members(workspace_id)
     members = [User(**member) for member in members_data]
-    
+
     # Get all documents (for now, return all documents - in a real app, filter by workspace)
     documents_data = db.get_documents()
     documents = []
     for doc in documents_data:
-        documents.append(Document(
-            id=doc["id"],
-            title=doc["title"],
-            description=doc.get("description"),
-            type=doc.get("type"),
-            file_path=doc.get("file_path"),
-            fileSize=doc.get("file_size"),
-            pageCount=doc.get("page_count"),
-            created_at=doc["created_at"],
-            updated_at=doc["updated_at"]
-        ))
+        documents.append(
+            Document(
+                id=doc["id"],
+                title=doc["title"],
+                description=doc.get("description"),
+                type=doc.get("type"),
+                file_path=doc.get("file_path"),
+                file_size=doc.get("file_size"),
+                page_count=doc.get("page_count"),
+                created_at=doc["created_at"],
+                updated_at=doc["updated_at"],
+            )
+        )
 
     # Create detailed workspace
     detailed_workspace = WorkspaceDetail(
@@ -363,7 +373,7 @@ def get_workspace_detail(workspace_id: str):
         member_count=workspace["member_count"],
         is_owner=bool(workspace.get("is_owner", 0)),
         members=members,
-        documents=documents
+        documents=documents,
     )
 
     return WorkspaceDetailResponse(workspace=detailed_workspace)
@@ -377,14 +387,16 @@ def get_cases():
     cases = []
     logger.info(f"Cases: {cases_data}")
     for case in cases_data:
-        cases.append(Case(
-            id=case["id"],
-            title=case["title"],
-            description=case.get("description", ""),
-            document_ids=case["document_ids"],
-            created_at=case["created_at"],
-            updated_at=case["updated_at"]
-        ))
+        cases.append(
+            Case(
+                id=case["id"],
+                title=case["title"],
+                description=case.get("description", ""),
+                document_ids=case["document_ids"],
+                created_at=case["created_at"],
+                updated_at=case["updated_at"],
+            )
+        )
     return CaseListResponse(cases=cases)
 
 
@@ -401,17 +413,19 @@ def get_case_detail(case_id: str):
     for doc_id in case["document_ids"]:
         doc = db.get_document_by_id(doc_id)
         if doc:
-            case_documents.append(Document(
-                id=doc["id"],
-                title=doc["title"],
-                description=doc.get("description"),
-                type=doc.get("type"),
-                file_path=doc.get("file_path"),
-                fileSize=doc.get("file_size"),
-                pageCount=doc.get("page_count"),
-                created_at=doc["created_at"],
-                updated_at=doc["updated_at"]
-            ))
+            case_documents.append(
+                Document(
+                    id=doc["id"],
+                    title=doc["title"],
+                    description=doc.get("description"),
+                    type=doc.get("type"),
+                    file_path=doc.get("file_path"),
+                    file_size=doc.get("file_size"),
+                    page_count=doc.get("page_count"),
+                    created_at=doc["created_at"],
+                    updated_at=doc["updated_at"],
+                )
+            )
 
     detailed_case = CaseDetail(
         id=case["id"],
@@ -420,7 +434,7 @@ def get_case_detail(case_id: str):
         document_ids=case["document_ids"],
         created_at=case["created_at"],
         updated_at=case["updated_at"],
-        documents=case_documents
+        documents=case_documents,
     )
 
     return CaseDetailResponse(case=detailed_case)
@@ -445,6 +459,31 @@ def create_case(request: CreateCaseRequest):
     return CreateCaseResponse(case=Case(**new_case))
 
 
+@app.get("/cases/{case_id}/stakeholders", response_model=StakeholderListResponse)
+def get_case_stakeholders(case_id: str):
+    """Get all unique stakeholders for a case"""
+    case = db.get_case_by_id(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    stakeholders_data = db.get_case_stakeholders(case_id)
+    stakeholders = []
+
+    for stakeholder in stakeholders_data:
+        stakeholders.append(
+            Stakeholder(
+                id=stakeholder["id"],
+                type=stakeholder.get("type", ""),
+                name=stakeholder["name"],
+                contact_info=stakeholder.get("contact_info", ""),
+                created_at=stakeholder["created_at"],
+                updated_at=stakeholder["updated_at"],
+            )
+        )
+
+    return StakeholderListResponse(stakeholders=stakeholders)
+
+
 # Documents routes
 @app.get("/documents")
 def get_documents():
@@ -453,17 +492,19 @@ def get_documents():
     documents = []
     logger.info(f"Documents: {documents_data}")
     for doc in documents_data:
-        documents.append(Document(
-            id=doc["id"],
-            title=doc["title"],
-            description=doc.get("description"),
-            type=doc.get("type"),
-            file_path=doc.get("file_path"),
-            fileSize=doc.get("file_size"),
-            pageCount=doc.get("page_count"),
-            created_at=doc["created_at"],
-            updated_at=doc["updated_at"]
-        ))
+        documents.append(
+            Document(
+                id=doc["id"],
+                title=doc["title"],
+                description=doc.get("description"),
+                type=doc.get("type"),
+                file_path=doc.get("file_path"),
+                file_size=doc.get("file_size"),
+                page_count=doc.get("page_count"),
+                created_at=doc["created_at"],
+                updated_at=doc["updated_at"],
+            )
+        )
     return {"documents": documents}
 
 
@@ -498,11 +539,11 @@ def get_document_detail(document_id: str):
                             name=stakeholder["name"],
                             contact_info=stakeholder.get("contact_info"),
                             created_at=stakeholder["created_at"],
-                            updated_at=stakeholder["updated_at"]
+                            updated_at=stakeholder["updated_at"],
                         ),
                         confidence=cs["confidence"],
-                        mentionText=cs["mention_text"],
-                        mentionBbox=BoundingBox(**cs["mention_bbox"]),
+                        mention_text=cs["mention_text"],
+                        mention_bbox=BoundingBox(**cs["mention_bbox"]),
                         verified=bool(cs["verified"]),
                         created_at=cs["created_at"],
                     )
@@ -515,7 +556,7 @@ def get_document_detail(document_id: str):
                 page=chunk["page"],
                 context=chunk["context"],
                 bbox=BoundingBox(**chunk["bbox"]),
-                stakeholderMentions=stakeholder_mentions,
+                stakeholder_mentions=stakeholder_mentions,
             )
         )
 
@@ -528,12 +569,15 @@ def get_document_detail(document_id: str):
         description=document.get("description"),
         type=document.get("type"),
         file_path=document.get("file_path"),
-        fileSize=document.get("file_size"),
-        pageCount=document.get("page_count"),
+        file_size=document.get("file_size"),
+        page_count=document.get("page_count"),
+        parse_status=document.get("parse_status"),
+        uploaded_at=document.get("uploaded_at"),
+        processed_at=document.get("processed_at"),
         created_at=document["created_at"],
         updated_at=document["updated_at"],
         chunks=chunks_with_mentions,
-        pdfUrl=pdf_url,
+        pdf_url=pdf_url,
     )
 
 
@@ -587,11 +631,11 @@ def get_document_chunks(document_id: str):
                             name=stakeholder["name"],
                             contact_info=stakeholder.get("contact_info"),
                             created_at=stakeholder["created_at"],
-                            updated_at=stakeholder["updated_at"]
+                            updated_at=stakeholder["updated_at"],
                         ),
                         confidence=cs["confidence"],
-                        mentionText=cs["mention_text"],
-                        mentionBbox=BoundingBox(**cs["mention_bbox"]),
+                        mention_text=cs["mention_text"],
+                        mention_bbox=BoundingBox(**cs["mention_bbox"]),
                         verified=bool(cs["verified"]),
                         created_at=cs["created_at"],
                     )
@@ -604,7 +648,7 @@ def get_document_chunks(document_id: str):
                 page=chunk["page"],
                 context=chunk["context"],
                 bbox=BoundingBox(**chunk["bbox"]),
-                stakeholderMentions=stakeholder_mentions,
+                stakeholder_mentions=stakeholder_mentions,
             )
         )
 
@@ -673,9 +717,7 @@ def background_parse_document(doc_id: str, page_count: int):
 
 @app.post("/documents/upload", response_model=UploadDocumentResponse)
 async def upload_document(
-    case_id: str, 
-    file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = BackgroundTasks()
+    case_id: str, file: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks()
 ):
     """Upload a PDF document to a case"""
     logger.info(f"Upload document request: {case_id}, {file.filename}")
@@ -728,7 +770,7 @@ async def upload_document(
 
     db.create_document(new_document)
     db.add_document_to_case(case_id, doc_id)
-    
+
     # Run parsing and chunk generation in the background
     background_tasks.add_task(background_parse_document, doc_id, page_count)
 
@@ -738,14 +780,15 @@ async def upload_document(
         description=new_document["description"],
         type=new_document["type"],
         file_path=new_document["file_path"],
-        fileSize=new_document["file_size"],
-        pageCount=new_document["page_count"],
-        processingStatus=new_document["parse_status"],
+        file_size=new_document["file_size"],
+        page_count=new_document["page_count"],
+        parse_status=new_document["parse_status"],
         created_at=new_document["created_at"],
         updated_at=new_document["updated_at"],
     )
 
     return UploadDocumentResponse(document=return_document)
+
 
 # =============================================================================
 # EMAIL INTEGRATION
@@ -772,9 +815,57 @@ async def upload_document(
 # See backend/server/email/README.md for detailed documentation
 # =============================================================================
 
+# =============================================================================
+
+
 from server.email import email_router
 
 app.include_router(email_router)
+
+
+# VERIFICATION INTEGRATION
+# =============================================================================
+# Verification endpoints for chunk stakeholder mentions
+# Provides functionality to verify or unverify stakeholder mentions individually
+# or in bulk based on confidence thresholds
+#
+# Available endpoints:
+#   - POST /verification/mention/{mention_id}  - Verify/unverify single mention
+#   - POST /verification/bulk                  - Bulk verify mentions by filter
+#
+# Bulk verification filters:
+#   - "high"   - Verify mentions with confidence >= 0.9
+#   - "medium" - Verify mentions with confidence >= 0.7
+#   - "all"    - Verify all unverified mentions regardless of confidence
+#
+# See backend/server/verification.py for implementation details
+# =============================================================================
+
+from server.verification import verification_router
+
+app.include_router(verification_router)
+
+
+# =============================================================================
+# PDF GENERATION INTEGRATION
+# =============================================================================
+# PDF generation endpoints for stakeholders
+# Provides functionality to generate PDFs based on stakeholder mentions
+#
+# Available endpoints:
+#   - POST /pdf/stakeholders/{stakeholder_id}/generate  - Generate PDF for stakeholder
+#
+# Content types:
+#   - "full_documents" - Include all PDF documents from the case
+#   - "pages_only"     - Extract only pages containing stakeholder mentions
+#   - "chunks_only"    - Create text-based PDF with chunk excerpts
+#
+# See backend/server/pdf.py for implementation details
+# =============================================================================
+
+from server.pdf import pdf_router
+
+app.include_router(pdf_router)
 
 
 if __name__ == "__main__":

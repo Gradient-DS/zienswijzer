@@ -1,5 +1,5 @@
-"""Parse documents into markdown.
-"""
+"""Parse documents into markdown."""
+
 import typing as t
 import logging
 
@@ -11,6 +11,7 @@ from server import db
 
 logger = logging.getLogger(__name__)
 
+
 class PDFParser:
     """Parse PDF documents into markdown format."""
 
@@ -20,27 +21,26 @@ class PDFParser:
     def load_pdf(self, pdf_path: t.Union[str, Path]) -> Blob:
         """
         Load a PDF from a file path and return as a Blob.
-        
+
         Args:
             pdf_path: Path to the PDF file
-            
+
         Returns:
             Blob: Langchain Blob object containing the PDF
-            
+
         Raises:
             FileNotFoundError: If the PDF file doesn't exist
             ValueError: If the file is not a PDF
         """
         path = Path(pdf_path)
-        
+
         if not path.exists():
             raise FileNotFoundError(f"PDF file not found: {path}")
-        
-        if path.suffix.lower() != '.pdf':
-            raise ValueError(f"File is not a PDF: {path}")
-        
-        return Blob.from_path(str(path))
 
+        if path.suffix.lower() != ".pdf":
+            raise ValueError(f"File is not a PDF: {path}")
+
+        return Blob.from_path(str(path))
 
     def parse(self, blob: Blob, verbose: bool = False) -> t.List[LCDocument]:
         """
@@ -58,7 +58,6 @@ class PDFParser:
 
         page_docs: t.List[LCDocument] = list(self.parser.lazy_parse(blob))
         return page_docs
-        
 
     def parse_batch(self, blobs: t.List[Blob], verbose: bool = False) -> t.Dict[str, t.List[LCDocument]]:
         """
@@ -77,15 +76,17 @@ class PDFParser:
         for idx, blob in enumerate(blobs, start=1):
             if verbose:
                 print(f"Parsing PDF {idx}/{total}: {blob.source}")
-            
+
             docs = self.parse(blob, verbose=verbose)
             if docs:
                 results[blob.source] = docs
 
         return results
 
+
 class EntityExtractor:
     """Extract entities from a document."""
+
     def __init__(self):
         return "TEST"
 
@@ -103,9 +104,9 @@ def main(doc_id: str) -> str:
     document = db.get_document_by_id(doc_id)
     if not document:
         raise ValueError(f"Document not found: {doc_id}")
-    
-    INPUT_PATH = Path(__file__).parent.parent / document['file_path']
-    
+
+    INPUT_PATH = Path(__file__).parent.parent / document["file_path"]
+
     logger.info(f"Parsing document")
     parser = PDFParser()
     blob = parser.load_pdf(INPUT_PATH)
@@ -142,12 +143,11 @@ def main(doc_id: str) -> str:
     
 
 
-
 if __name__ == "__main__":
     # Example usage
     INPUT_DIR = Path("data/pdfs")
     INPUT_FILE = Path("data/document.pdf")
-    
+
     # Parse the PDFs
     parser = PDFParser()
     blob = parser.load_pdf(INPUT_FILE)

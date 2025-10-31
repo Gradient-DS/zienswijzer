@@ -42,6 +42,20 @@ export const useUploadDocument = () => {
     });
 };
 
+export const useRemoveDocumentFromCase = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ caseId, documentId }: { caseId: string; documentId: string }) => {
+            const res = await apiClient.delete(`/cases/${caseId}/documents/${documentId}`);
+            return res.data;
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['cases', variables.caseId] });
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+        },
+    });
+};
+
 export const getDocumentPdfUrl = (documentId: string): string => {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
     return `${baseUrl}/documents/${documentId}/pdf`;

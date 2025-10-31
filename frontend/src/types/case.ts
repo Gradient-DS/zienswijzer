@@ -4,9 +4,9 @@ export interface Case {
     id: string;
     title: string;
     description: string;
-    documentIds: string[];
-    createdAt: string;
-    updatedAt: string;
+    document_ids: string[];
+    created_at: string;
+    updated_at: string;
 }
 
 export interface CaseDetail extends Case {
@@ -18,14 +18,16 @@ export interface Document {
     title: string;
     description?: string;
     type?: string;
-    filePath?: string;
-    fileSize?: number;
-    pageCount?: number;
-    processingStatus?: 'pending' | 'processing' | 'completed' | 'failed';
-    uploadedAt?: string;
-    processedAt?: string;
-    createdAt: string;
-    updatedAt: string;
-    pdfUrl?: string;
+    keywords?: string;
+    author?: string;
+    file_path?: string;
+    file_size?: number;
+    page_count?: number;
+    parse_status?: string;
+    uploaded_at?: string;
+    processed_at?: string;
+    created_at: string;
+    updated_at: string;
+    pdf_url?: string;
     chunks?: ChunkDetail[];
 }
