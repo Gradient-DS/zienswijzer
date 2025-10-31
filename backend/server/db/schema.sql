@@ -167,8 +167,10 @@ CREATE TABLE IF NOT EXISTS SentEmails (
     tracking_id TEXT, -- Unique tracking ID added to email subject for reply detection
     sent_at TEXT NOT NULL,
     case_id TEXT, -- Optional link to a case
+    stakeholder_id TEXT, -- Optional link to a stakeholder
     created_at TEXT NOT NULL,
-    FOREIGN KEY (case_id) REFERENCES Cases(id)
+    FOREIGN KEY (case_id) REFERENCES Cases(id),
+    FOREIGN KEY (stakeholder_id) REFERENCES Stakeholders(id)
 );
 
 -- ====================
