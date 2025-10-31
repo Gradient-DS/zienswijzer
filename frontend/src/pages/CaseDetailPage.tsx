@@ -4,10 +4,14 @@ import { useCase } from '@/api/cases';
 import { PDFViewer } from '@/components/features/PDFViewer';
 import { BreadcrumbNavigation } from '@/components/features/BreadcrumbNavigation';
 import { StakeholderDetailView } from '@/components/features/StakeholderDetailView';
+import { StakeholderBoard } from '@/components/features/StakeholderBoard';
 import { useCaseStakeholders } from '@/api/stakeholders';
 import { CreateCaseForm } from '@/components/features/CreateCaseForm';
 import { useUIStore } from '@/store';
 import { useCaseStep } from '@/hooks/useCaseStep';
+import { apiClient } from '@/api/client';
+import { transformChunkDetail } from '@/lib/mention-utils';
+import type { ChunkDetail } from '@/types';
 import { cn } from '@/lib/utils';
 
 export default function CaseDetailPage() {
@@ -18,7 +22,7 @@ export default function CaseDetailPage() {
     const searchParams = new URLSearchParams(location.search);
     const selectedDocumentId = searchParams.get('document') || undefined;
     const selectedStakeholderId = searchParams.get('stakeholder') || undefined;
-    const { step } = useCaseStep();
+    const { step, setStep } = useCaseStep();
     const { data: stakeholders } = useCaseStakeholders(id);
     const { isSidebarOpen } = useUIStore();
     const [isMobile, setIsMobile] = useState(false);
@@ -84,11 +88,24 @@ export default function CaseDetailPage() {
                     );
                 }
             }
+            // Show board view by default
+            if (id) {
+                return (
+                    <StakeholderBoard
+                        caseId={id}
+                        onSelectStakeholder={(stakeholderId) => {
+                            const newSearchParams = new URLSearchParams(location.search);
+                            newSearchParams.set('stakeholder', stakeholderId);
+                            newSearchParams.set('step', 'belanghebbenden');
+                            navigate(`${location.pathname}?${newSearchParams.toString()}`, { replace: true });
+                        }}
+                    />
+                );
+            }
             return (
                 <div className="flex items-center justify-center h-full text-gray-500">
                     <div className="text-center">
-                        <p className="text-lg font-medium mb-2">Geen belanghebbende geselecteerd</p>
-                        <p className="text-sm">Selecteer een belanghebbende uit de lijst om te bekijken</p>
+                        <p className="text-lg font-medium mb-2">Geen zaak geselecteerd</p>
                     </div>
                 </div>
             );
@@ -96,10 +113,66 @@ export default function CaseDetailPage() {
 
         if (step === 'review') {
             if (selectedDocumentId) {
+                const handleNextDocument = async () => {
+                    if (!caseData?.documents || caseData.documents.length === 0) return;
+
+                    const currentIndex = caseData.documents.findIndex(doc => doc.id === selectedDocumentId);
+                    if (currentIndex === -1) return;
+
+                    // Helper to check if a document has unchecked chunks
+                    const checkDocumentHasUncheckedChunks = async (docId: string): Promise<boolean> => {
+                        try {
+                            const res = await apiClient.get(`/documents/${docId}/chunks`, {
+                                params: id ? { case_id: id } : {}
+                            });
+                            const chunks = (res.data.chunks || []).map(transformChunkDetail) as ChunkDetail[];
+                            const allMentions = chunks.flatMap((chunk: ChunkDetail) => chunk.stakeholder_mentions || []);
+                            return allMentions.some((mention) => !mention.checked);
+                        } catch {
+                            return false;
+                        }
+                    };
+
+                    // Find next document with unchecked chunks
+                    let nextIndex = currentIndex;
+                    let attempts = 0;
+                    let foundNext = false;
+
+                    while (attempts < caseData.documents.length) {
+                        nextIndex = (nextIndex + 1) % caseData.documents.length;
+                        attempts++;
+                        const nextDoc = caseData.documents[nextIndex];
+
+                        const hasUnchecked = await checkDocumentHasUncheckedChunks(nextDoc.id);
+                        if (hasUnchecked) {
+                            const newSearchParams = new URLSearchParams(location.search);
+                            newSearchParams.set('document', nextDoc.id);
+                            newSearchParams.set('step', 'review');
+                            navigate(`${location.pathname}?${newSearchParams.toString()}`);
+                            foundNext = true;
+                            break;
+                        }
+                    }
+
+                    // If no document with unchecked chunks found, navigate to next step
+                    if (!foundNext && id) {
+                        setStep('belanghebbenden', id);
+                    }
+                };
+
+                const handleNavigateToNextStep = () => {
+                    if (id) {
+                        setStep('belanghebbenden', id);
+                    }
+                };
+
                 return (
                     <PDFViewer
                         documentId={selectedDocumentId}
                         className="h-full"
+                        onNextDocument={handleNextDocument}
+                        allDocuments={caseData.documents}
+                        onNavigateToNextStep={handleNavigateToNextStep}
                     />
                 );
             }
