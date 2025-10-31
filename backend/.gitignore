@@ -24,3 +24,6 @@ wheels/
 pip-log.txt
 pip-delete-this-directory.txt
 .DS_Store
+
+database.sqlite3
+data

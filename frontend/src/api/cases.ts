@@ -41,6 +41,16 @@ export const useCase = (caseId: string | undefined) => {
     });
 };
 
+interface UpdateCaseRequest {
+    id: string;
+    title: string;
+    description: string;
+}
+
+interface UpdateCaseResponse {
+    case: Case;
+}
+
 export const useCreateCase = () => {
     const queryClient = useQueryClient();
     return useMutation({
@@ -48,6 +58,21 @@ export const useCreateCase = () => {
             apiClient.post<CreateCaseResponse>('/cases', data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['cases'] });
+        },
+    });
+};
+
+export const useUpdateCase = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (data: UpdateCaseRequest) =>
+            apiClient.put<UpdateCaseResponse>(`/cases/${data.id}`, {
+                title: data.title,
+                description: data.description,
+            }),
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['cases'] });
+            queryClient.invalidateQueries({ queryKey: ['cases', variables.id] });
         },
     });
 };

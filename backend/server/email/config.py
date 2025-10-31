@@ -10,11 +10,11 @@ Configuration is loaded from backend/.env file. To set up:
 
 Usage:
     from .config import email_config
-    
+
     # Access configuration values
     client_id = email_config.client_id
     scopes = email_config.scopes
-    
+
 Environment Variables (all prefixed with MICROSOFT_):
     MICROSOFT_CLIENT_ID: OAuth client ID from Azure AD app registration (required)
     MICROSOFT_CLIENT_SECRET: OAuth client secret from Azure AD app registration (required)
@@ -35,49 +35,44 @@ from pydantic import field_validator
 class EmailConfig(BaseSettings):
     """
     Email integration configuration.
-    
+
     All settings can be configured via environment variables with the prefix
     MICROSOFT_ (e.g., MICROSOFT_CLIENT_ID).
     """
-    
+
     model_config = SettingsConfigDict(
         env_prefix="MICROSOFT_",
         case_sensitive=False,
         env_file=str(Path(__file__).parent.parent.parent / ".env"),
         env_file_encoding="utf-8",
-        extra="ignore"
+        extra="ignore",
     )
-    
+
     # Microsoft OAuth credentials (required - no defaults for security)
     client_id: str
     client_secret: str
     tenant_id: str
-    
+
     # Microsoft OAuth configuration
     redirect_uri: str = "http://localhost:8000/email/callback"
-    
+
     # Microsoft Graph API configuration
     graph_api_endpoint: str = "https://graph.microsoft.com/v1.0"
     authority: Optional[str] = None  # Will be built from tenant_id
-    
+
     # OAuth scopes required for email operations
-    scopes: Union[str, List[str]] = [
-        "User.Read",
-        "Mail.Read",
-        "Mail.Send",
-        "Mail.ReadWrite"
-    ]
-    
+    scopes: Union[str, List[str]] = ["User.Read", "Mail.Read", "Mail.Send", "Mail.ReadWrite"]
+
     # Email query limits
     max_emails_per_request: int = 100
     default_emails_per_page: int = 10
 
-    @field_validator('scopes', mode='after')
+    @field_validator("scopes", mode="after")
     @classmethod
     def parse_scopes(cls, v):
         """Parse comma-separated scopes string into a list"""
         if isinstance(v, str):
-            return [scope.strip() for scope in v.split(',') if scope.strip()]
+            return [scope.strip() for scope in v.split(",") if scope.strip()]
         return v
 
     def __init__(self, **data):
@@ -92,4 +87,3 @@ email_config = EmailConfig()
 
 
 __all__ = ["email_config", "EmailConfig"]
-
