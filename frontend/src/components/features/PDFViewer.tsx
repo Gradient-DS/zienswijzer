@@ -6,8 +6,6 @@ import { useDocument } from '@/api/documents';
 import { getDocumentPdfUrl } from '@/api/documents';
 import { PDFHighlightOverlay } from './PDFHighlightOverlay';
 import { ChunkStakeholderSidebar } from './ChunkStakeholderSidebar';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/store';
 import type { StakeholderMention } from '@/types';
 
@@ -18,24 +16,24 @@ interface PDFViewerProps {
     className?: string;
 }
 
+interface PageDimensions {
+    width: number;
+    height: number;
+}
+
 export function PDFViewer({ documentId, className }: PDFViewerProps) {
     const [numPages, setNumPages] = useState<number>(0);
-    const [pageNumber, setPageNumber] = useState<number>(1);
-    const [pageWidth, setPageWidth] = useState<number>(0);
-    const [pageHeight, setPageHeight] = useState<number>(0);
     const [scale, setScale] = useState<number>(1);
     const [containerWidth, setContainerWidth] = useState<number>(0);
+    const [pageDimensions, setPageDimensions] = useState<Map<number, PageDimensions>>(new Map());
     const [selectedMentionId, setSelectedMentionId] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
     const { data: document, isLoading: documentLoading } = useDocument(documentId);
     const pdfUrl = getDocumentPdfUrl(documentId);
     const { isChunkSidebarOpen, setChunkSidebarOpen } = useUIStore();
-
-    useEffect(() => {
-        console.log('isChunkSidebarOpen changed:', isChunkSidebarOpen, 'selectedMentionId:', selectedMentionId);
-    }, [isChunkSidebarOpen, selectedMentionId]);
 
     useEffect(() => {
         const updateContainerWidth = () => {
@@ -53,10 +51,18 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
         setNumPages(numPages);
     }
 
-    function onPageLoadSuccess(page: any) {
+    function onPageLoadSuccess(page: any, pageNum: number) {
         const viewport = page.getViewport({ scale: 1 });
-        setPageWidth(viewport.width);
-        setPageHeight(viewport.height);
+        const dimensions = {
+            width: viewport.width,
+            height: viewport.height,
+        };
+
+        setPageDimensions((prev) => {
+            const next = new Map(prev);
+            next.set(pageNum, dimensions);
+            return next;
+        });
 
         if (containerWidth > 0 && viewport.width > 0) {
             const padding = 32;
@@ -67,21 +73,16 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
     }
 
     useEffect(() => {
-        if (pageWidth > 0 && containerWidth > 0) {
-            const padding = 32;
-            const availableWidth = containerWidth - padding;
-            const calculatedScale = Math.min(availableWidth / pageWidth, 1.5);
-            setScale(calculatedScale);
+        if (pageDimensions.size > 0 && containerWidth > 0) {
+            const firstPageDim = pageDimensions.values().next().value;
+            if (firstPageDim) {
+                const padding = 32;
+                const availableWidth = containerWidth - padding;
+                const calculatedScale = Math.min(availableWidth / firstPageDim.width, 1.5);
+                setScale(calculatedScale);
+            }
         }
-    }, [containerWidth, pageWidth]);
-
-    function goToPrevPage() {
-        setPageNumber((prev) => Math.max(1, prev - 1));
-    }
-
-    function goToNextPage() {
-        setPageNumber((prev) => Math.min(numPages, prev + 1));
-    }
+    }, [containerWidth, pageDimensions]);
 
     const handleMentionClick = (mention: StakeholderMention) => {
         if (!document?.chunks) return;
@@ -91,12 +92,38 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
         );
 
         if (chunkWithMention) {
-            if (chunkWithMention.page !== pageNumber) {
-                setPageNumber(chunkWithMention.page);
-            }
             setSelectedMentionId(mention.id);
             setChunkSidebarOpen(true);
+
+            scrollToMention(chunkWithMention.page, mention);
         }
+    };
+
+    const scrollToMention = (targetPage: number, mention: StakeholderMention) => {
+        setTimeout(() => {
+            const scrollContainer = scrollContainerRef.current;
+            const pageElement = pageRefs.current.get(targetPage);
+
+            if (!scrollContainer || !pageElement) return;
+
+            const pageDim = pageDimensions.get(targetPage);
+            if (!pageDim) return;
+
+            const bbox = mention.mentionBbox;
+            const scaledY = bbox.y * scale;
+            const scaledHeight = bbox.height * scale;
+
+            const containerRect = scrollContainer.getBoundingClientRect();
+            const pageRect = pageElement.getBoundingClientRect();
+
+            const relativeY = pageRect.top - containerRect.top + scrollContainer.scrollTop + scaledY;
+            const targetScrollTop = relativeY - containerRect.height / 2 + scaledHeight / 2;
+
+            scrollContainer.scrollTo({
+                top: Math.max(0, targetScrollTop),
+                behavior: 'smooth',
+            });
+        }, 150);
     };
 
     useEffect(() => {
@@ -104,58 +131,6 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
             setSelectedMentionId(null);
         }
     }, [isChunkSidebarOpen, selectedMentionId]);
-
-    useEffect(() => {
-        if (selectedMentionId && document?.chunks && document.chunks.length > 0) {
-            const chunkWithMention = document.chunks.find((c) =>
-                c.stakeholderMentions.some((m) => m.id === selectedMentionId)
-            );
-
-            if (chunkWithMention && chunkWithMention.page !== pageNumber) {
-                setSelectedMentionId(null);
-            }
-        }
-    }, [pageNumber, document?.chunks, selectedMentionId]);
-
-    useEffect(() => {
-        if (selectedMentionId && document?.chunks && scrollContainerRef.current && pageWidth > 0 && pageHeight > 0) {
-            const chunkWithMention = document.chunks.find((c) =>
-                c.stakeholderMentions.some((m) => m.id === selectedMentionId)
-            );
-
-            if (chunkWithMention && chunkWithMention.page === pageNumber) {
-                const mention = chunkWithMention.stakeholderMentions.find((m) => m.id === selectedMentionId);
-                if (mention) {
-                    setTimeout(() => {
-                        const scrollContainer = scrollContainerRef.current;
-                        if (!scrollContainer) return;
-
-                        const bbox = mention.mentionBbox;
-                        const scaledY = bbox.y * scale;
-                        const scaledX = bbox.x * scale;
-                        const scaledHeight = bbox.height * scale;
-
-                        const containerRect = scrollContainer.getBoundingClientRect();
-                        const pdfWrapper = scrollContainer.querySelector('.relative');
-                        if (!pdfWrapper) return;
-
-                        const pdfWrapperRect = pdfWrapper.getBoundingClientRect();
-                        const relativeY = pdfWrapperRect.top - containerRect.top + scrollContainer.scrollTop + scaledY;
-                        const relativeX = pdfWrapperRect.left - containerRect.left + scrollContainer.scrollLeft + scaledX;
-
-                        const targetScrollTop = relativeY - containerRect.height / 2 + scaledHeight / 2;
-                        const targetScrollLeft = relativeX - containerRect.width / 2;
-
-                        scrollContainer.scrollTo({
-                            top: Math.max(0, targetScrollTop),
-                            left: Math.max(0, targetScrollLeft),
-                            behavior: 'smooth',
-                        });
-                    }, 150);
-                }
-            }
-        }
-    }, [selectedMentionId, pageNumber, pageWidth, pageHeight, scale, document?.chunks]);
 
     if (documentLoading) {
         return (
@@ -167,30 +142,6 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
 
     return (
         <div className={`flex flex-col h-full ${className || ''}`}>
-            <div className="flex items-center justify-between p-4 border-b bg-white">
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={goToPrevPage}
-                        disabled={pageNumber <= 1}
-                    >
-                        <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm text-gray-700">
-                        Pagina {pageNumber} van {numPages}
-                    </span>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={goToNextPage}
-                        disabled={pageNumber >= numPages}
-                    >
-                        <ChevronRight className="h-4 w-4" />
-                    </Button>
-                </div>
-            </div>
-
             <div className="flex-1 flex overflow-hidden bg-gray-100">
                 <div
                     className="flex-1 overflow-auto pdf-container"
@@ -199,50 +150,63 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
                         scrollContainerRef.current = el;
                     }}
                 >
-                    <div className="flex justify-center p-4">
-                        <div className="relative">
-                            <PDFDocument
-                                file={pdfUrl}
-                                onLoadSuccess={onDocumentLoadSuccess}
-                                loading={
-                                    <div className="flex items-center justify-center p-8">
-                                        <div className="text-gray-500">PDF laden...</div>
-                                    </div>
-                                }
-                                error={
-                                    <div className="flex items-center justify-center p-8">
-                                        <div className="text-red-500">Fout bij het laden van de PDF</div>
-                                    </div>
-                                }
-                            >
-                                <div className="relative" style={{ zIndex: 1 }}>
-                                    <PDFPage
-                                        pageNumber={pageNumber}
-                                        onLoadSuccess={onPageLoadSuccess}
-                                        scale={scale}
-                                        renderTextLayer={true}
-                                        renderAnnotationLayer={true}
-                                    />
-                                    {document?.chunks && pageWidth > 0 && pageHeight > 0 && (
-                                        <PDFHighlightOverlay
-                                            chunks={document.chunks}
-                                            currentPage={pageNumber}
-                                            pageWidth={pageWidth}
-                                            pageHeight={pageHeight}
-                                            scale={scale}
-                                            selectedMentionId={selectedMentionId}
-                                            onMentionClick={handleMentionClick}
-                                        />
-                                    )}
+                    <div className="flex flex-col items-center py-4">
+                        <PDFDocument
+                            file={pdfUrl}
+                            onLoadSuccess={onDocumentLoadSuccess}
+                            loading={
+                                <div className="flex items-center justify-center p-8">
+                                    <div className="text-gray-500">PDF laden...</div>
                                 </div>
-                            </PDFDocument>
-                        </div>
+                            }
+                            error={
+                                <div className="flex items-center justify-center p-8">
+                                    <div className="text-red-500">Fout bij het laden van de PDF</div>
+                                </div>
+                            }
+                        >
+                            {Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => {
+                                const pageDim = pageDimensions.get(pageNum);
+                                return (
+                                    <div
+                                        key={pageNum}
+                                        ref={(el) => {
+                                            if (el) {
+                                                pageRefs.current.set(pageNum, el);
+                                            } else {
+                                                pageRefs.current.delete(pageNum);
+                                            }
+                                        }}
+                                        className="relative mb-4"
+                                        style={{ zIndex: 1 }}
+                                    >
+                                        <PDFPage
+                                            pageNumber={pageNum}
+                                            onLoadSuccess={(page) => onPageLoadSuccess(page, pageNum)}
+                                            scale={scale}
+                                            renderTextLayer={true}
+                                            renderAnnotationLayer={true}
+                                        />
+                                        {document?.chunks && pageDim && (
+                                            <PDFHighlightOverlay
+                                                chunks={document.chunks}
+                                                currentPage={pageNum}
+                                                pageWidth={pageDim.width}
+                                                pageHeight={pageDim.height}
+                                                scale={scale}
+                                                selectedMentionId={selectedMentionId}
+                                                onMentionClick={handleMentionClick}
+                                            />
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </PDFDocument>
                     </div>
                 </div>
                 {isChunkSidebarOpen && (
                     <ChunkStakeholderSidebar
                         chunks={document?.chunks || []}
-                        currentPage={pageNumber}
                         selectedMentionId={selectedMentionId}
                         onMentionClick={handleMentionClick}
                         onClose={() => {

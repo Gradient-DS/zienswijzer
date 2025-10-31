@@ -1,18 +1,25 @@
-import { useEffect, useState } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useCase } from '@/api/cases';
 import { PDFViewer } from '@/components/features/PDFViewer';
+import { BreadcrumbNavigation } from '@/components/features/BreadcrumbNavigation';
+import { ContactStepPlaceholder } from '@/components/features/ContactStepPlaceholder';
+import { CreateCaseForm } from '@/components/features/CreateCaseForm';
 import { useUIStore } from '@/store';
+import { useCaseStep } from '@/hooks/useCaseStep';
 import { cn } from '@/lib/utils';
 
 export default function CaseDetailPage() {
     const { id } = useParams<{ id: string }>();
     const location = useLocation();
+    const navigate = useNavigate();
     const { data: caseData, isLoading, error } = useCase(id);
     const searchParams = new URLSearchParams(location.search);
     const selectedDocumentId = searchParams.get('document') || undefined;
+    const { step } = useCaseStep();
     const { isSidebarOpen } = useUIStore();
     const [isMobile, setIsMobile] = useState(false);
+    const hasAutoSelectedRef = useRef<string | undefined>(undefined);
 
     useEffect(() => {
         const checkMobile = () => {
@@ -22,6 +29,23 @@ export default function CaseDetailPage() {
         window.addEventListener('resize', checkMobile);
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
+
+    useEffect(() => {
+        if (step === 'review' && id && caseData?.documents && caseData.documents.length > 0 && !selectedDocumentId) {
+            const firstUncompletedDocument = caseData.documents.find(
+                doc => doc.processingStatus !== 'completed' && doc.processingStatus !== 'failed'
+            ) || caseData.documents[0];
+
+            if (hasAutoSelectedRef.current !== id) {
+                hasAutoSelectedRef.current = id;
+                const newSearchParams = new URLSearchParams(location.search);
+                newSearchParams.set('document', firstUncompletedDocument.id);
+                navigate(`${location.pathname}?${newSearchParams.toString()}`, { replace: true });
+            }
+        } else if (step !== 'review') {
+            hasAutoSelectedRef.current = undefined;
+        }
+    }, [step, id, caseData?.documents, selectedDocumentId, location.pathname, location.search, navigate]);
 
     if (isLoading) {
         return (
@@ -39,6 +63,37 @@ export default function CaseDetailPage() {
         );
     }
 
+    const renderMainContent = () => {
+        if (step === 'create') {
+            return <CreateCaseForm caseId={id} />;
+        }
+
+        if (step === 'contact') {
+            return <ContactStepPlaceholder />;
+        }
+
+        if (step === 'review') {
+            if (selectedDocumentId) {
+                return (
+                    <PDFViewer
+                        documentId={selectedDocumentId}
+                        className="h-full"
+                    />
+                );
+            }
+            return (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                    <div className="text-center">
+                        <p className="text-lg font-medium mb-2">Geen document geselecteerd</p>
+                        <p className="text-sm">Selecteer een document uit de lijst om te bekijken</p>
+                    </div>
+                </div>
+            );
+        }
+
+        return null;
+    };
+
     return (
         <div className="h-full flex flex-col">
             <div className={cn(
@@ -46,35 +101,11 @@ export default function CaseDetailPage() {
                 isMobile ? "px-4 pb-3 -mt-12" : "px-6 pt-4 pb-3",
                 !isMobile && !isSidebarOpen && "pl-[72px]"
             )}>
-                {isMobile ? (
-                    <div className="flex items-start gap-4 pl-[56px]">
-                        <div className="flex-1 min-w-0">
-                            <h1 className="text-xl font-bold text-gray-900 truncate leading-tight">Zaak: {caseData.title}</h1>
-                            <p className="text-sm text-gray-700 truncate mt-1">Beschrijving: {caseData.description}</p>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="space-y-1">
-                        <h1 className="text-xl font-bold text-gray-900 leading-tight">Zaak: {caseData.title}</h1>
-                        <p className="text-sm text-gray-700">Beschrijving: {caseData.description}</p>
-                    </div>
-                )}
+                <BreadcrumbNavigation caseId={id} />
             </div>
 
             <div className="flex-1 bg-gray-100 overflow-hidden">
-                {selectedDocumentId ? (
-                    <PDFViewer
-                        documentId={selectedDocumentId}
-                        className="h-full"
-                    />
-                ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500">
-                        <div className="text-center">
-                            <p className="text-lg font-medium mb-2">Geen document geselecteerd</p>
-                            <p className="text-sm">Selecteer een document uit de lijst om te bekijken</p>
-                        </div>
-                    </div>
-                )}
+                {renderMainContent()}
             </div>
         </div>
     );

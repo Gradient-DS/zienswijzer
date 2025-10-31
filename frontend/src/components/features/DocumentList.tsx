@@ -6,9 +6,10 @@ interface DocumentListProps {
     documents: Document[];
     selectedDocumentId?: string;
     onSelectDocument: (documentId: string) => void;
+    disabled?: boolean;
 }
 
-export function DocumentList({ documents, selectedDocumentId, onSelectDocument }: DocumentListProps) {
+export function DocumentList({ documents, selectedDocumentId, onSelectDocument, disabled = false }: DocumentListProps) {
     if (documents.length === 0) {
         return (
             <div className="text-center py-8 text-muted-foreground">
@@ -23,12 +24,17 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument }
                 <div
                     key={document.id}
                     className={cn(
-                        'flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer transition-colors',
-                        selectedDocumentId === document.id
+                        'flex items-center gap-2 px-2 py-2 rounded-md transition-colors',
+                        disabled
+                            ? 'cursor-not-allowed opacity-60'
+                            : 'cursor-pointer',
+                        !disabled && selectedDocumentId === document.id
                             ? 'bg-gray-200 text-gray-900'
-                            : 'hover:bg-gray-100 text-gray-700'
+                            : !disabled
+                                ? 'hover:bg-gray-100 text-gray-700'
+                                : 'text-gray-500'
                     )}
-                    onClick={() => onSelectDocument(document.id)}
+                    onClick={() => !disabled && onSelectDocument(document.id)}
                 >
                     <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     <div className="flex-1 min-w-0">

@@ -17,6 +17,7 @@ export default function HomePage() {
     const navigate = useNavigate();
     const caseIdMatch = location.pathname.match(/\/cases\/(.+)/);
     const selectedCaseId = caseIdMatch ? caseIdMatch[1] : undefined;
+    const isNewCase = location.pathname === '/cases/new';
     const searchParams = new URLSearchParams(location.search);
     const selectedDocumentId = searchParams.get('document') || undefined;
     const { data: caseData } = useCase(selectedCaseId);
@@ -28,9 +29,11 @@ export default function HomePage() {
         if (selectedCaseId) {
             const newSearchParams = new URLSearchParams(location.search);
             newSearchParams.set('document', documentId);
+            // Always ensure we're on the review step when selecting a document
+            newSearchParams.set('step', 'review');
             navigate(`${location.pathname}?${newSearchParams.toString()}`, { replace: true });
         }
-    }, [selectedCaseId, location.pathname, navigate]);
+    }, [selectedCaseId, location.pathname, location.search, navigate]);
 
     useEffect(() => {
         const checkMobile = () => {
@@ -63,7 +66,7 @@ export default function HomePage() {
     const sidebarContent = (
         <Sidebar
             selectedCaseId={selectedCaseId}
-            documents={caseData?.documents}
+            documents={isNewCase ? [] : caseData?.documents}
             selectedDocumentId={selectedDocumentId}
             onSelectDocument={handleSelectDocument}
             isMobile={isMobile}

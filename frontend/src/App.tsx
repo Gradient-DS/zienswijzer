@@ -7,6 +7,7 @@ import WorkspacePage from './pages/WorkspacePage';
 import HomePage from './pages/HomePage';
 import HomePlaceholder from './pages/HomePlaceholder';
 import CaseDetailPage from './pages/CaseDetailPage';
+import CreateCasePage from './pages/CreateCasePage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
 
               <Route element={<HomePage />}>
                 <Route path="/home" element={<HomePlaceholder />} />
+                <Route path="/cases/new" element={<CreateCasePage />} />
                 <Route path="/cases/:id" element={<CaseDetailPage />} />
               </Route>
             </Route>
