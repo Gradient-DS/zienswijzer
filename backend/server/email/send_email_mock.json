@@ -1,0 +1,37 @@
+{
+    "to": [
+      {
+        "address": "ben@gradient-ds.com",
+        "name": "Ben Jacobs"
+      }
+    ],
+    "subject": "WOO Verzoek - Openbaar Gemaakte Informatie",
+    "requestDescription": "Varkensboerderijen",
+    "recipientName": "Ben Jacobs",
+    "senderName": "De Overheid",
+    "chunks": [
+      {
+        "id": "chunk-001",
+        "text": "Dit is het eerste tekstfragment dat in uw correspondentie is gevonden en openbaard zal worden.",
+        "pageNumber": 1,
+        "documentId": "doc-123"
+      },
+      {
+        "id": "chunk-002",
+        "text": "Dit is het tweede tekstfragment uit een ander document dat betrekking heeft op uw verzoek.",
+        "pageNumber": 3,
+        "documentId": "doc-124"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "document.pdf",
+        "contentType": "application/pdf",
+        "filePath": "/Users/benjacobs/Documents/Work/Gradient/Code/WOO/backend/server/data/document.pdf"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "bodyType": "HTML",
+    "importance": "normal"
+  }

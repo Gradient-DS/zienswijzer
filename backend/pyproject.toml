@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "woo-server"
+version = "0.1.0"
+description = "WOO Backend Server"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.10.0",
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.20",
+    "langchain-core>=0.1.0",
+    "langchain-pymupdf4llm>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["server*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
