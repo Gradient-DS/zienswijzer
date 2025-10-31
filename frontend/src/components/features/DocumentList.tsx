@@ -1,5 +1,4 @@
 import type { Document } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -19,42 +18,32 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument }
     }
 
     return (
-        <div className="space-y-2">
+        <div className="space-y-1">
             {documents.map((document) => (
-                <Card
+                <div
                     key={document.id}
                     className={cn(
-                        'cursor-pointer transition-all hover:shadow-md',
-                        selectedDocumentId === document.id && 'border-primary shadow-sm'
+                        'flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer transition-colors',
+                        selectedDocumentId === document.id
+                            ? 'bg-gray-200 text-gray-900'
+                            : 'hover:bg-gray-100 text-gray-700'
                     )}
                     onClick={() => onSelectDocument(document.id)}
                 >
-                    <CardHeader className="pb-3">
-                        <div className="flex items-start gap-3">
-                            <FileText className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                                <CardTitle className="text-base font-semibold line-clamp-1">
-                                    {document.title}
-                                </CardTitle>
-                                {document.description && (
-                                    <CardDescription className="line-clamp-2 mt-1">
-                                        {document.description}
-                                    </CardDescription>
-                                )}
-                            </div>
+                    <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">
+                            {document.title}
                         </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2 mt-0.5">
                             {document.pageCount && (
-                                <span>{document.pageCount} pagina{document.pageCount !== 1 ? "'s" : ''}</span>
-                            )}
-                            {document.fileSize && (
-                                <span>{(document.fileSize / 1024).toFixed(1)} KB</span>
+                                <span className="text-xs text-muted-foreground">
+                                    {document.pageCount} pagina{document.pageCount !== 1 ? "'s" : ''}
+                                </span>
                             )}
                             {document.processingStatus && (
                                 <span className={cn(
-                                    'px-2 py-0.5 rounded text-xs font-medium',
+                                    'px-1.5 py-0.5 rounded text-xs font-medium',
                                     document.processingStatus === 'completed' && 'bg-green-100 text-green-800',
                                     document.processingStatus === 'processing' && 'bg-yellow-100 text-yellow-800',
                                     document.processingStatus === 'pending' && 'bg-gray-100 text-gray-800',
@@ -64,8 +53,8 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument }
                                 </span>
                             )}
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
             ))}
         </div>
     );

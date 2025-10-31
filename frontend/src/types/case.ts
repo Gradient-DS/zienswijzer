@@ -1,3 +1,5 @@
+import type { ChunkDetail } from './document';
+
 export interface Case {
     id: string;
     title: string;
@@ -25,5 +27,5 @@ export interface Document {
     createdAt: string;
     updatedAt: string;
     pdfUrl?: string;
+    chunks?: ChunkDetail[];
 }
-

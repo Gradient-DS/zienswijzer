@@ -25,12 +25,15 @@ from .database import (
     # Chunk functions
     get_chunks_by_document,
     get_chunk_by_id,
+    create_chunk,
     # Stakeholder functions
     get_stakeholders,
     get_stakeholder_by_id,
+    create_stakeholder,
     # Chunk-Stakeholder functions
     get_chunk_stakeholders,
     get_stakeholder_mentions_by_document,
+    create_chunk_stakeholder,
 )
 
 __all__ = [
@@ -58,10 +61,13 @@ __all__ = [
     # Chunk functions
     "get_chunks_by_document",
     "get_chunk_by_id",
+    "create_chunk",
     # Stakeholder functions
     "get_stakeholders",
     "get_stakeholder_by_id",
+    "create_stakeholder",
     # Chunk-Stakeholder functions
     "get_chunk_stakeholders",
     "get_stakeholder_mentions_by_document",
+    "create_chunk_stakeholder",
 ]
