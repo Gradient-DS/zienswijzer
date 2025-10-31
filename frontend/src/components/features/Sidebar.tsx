@@ -77,29 +77,31 @@ export function Sidebar({
             };
 
             return (
-                <div className="flex-1 overflow-y-auto p-4">
-                    <div className="mb-3">
+                <div className="flex-1 flex flex-col min-h-0">
+                    <div className="flex-shrink-0 p-4 pb-3 border-b border-gray-200 bg-gray-50">
                         <h2 className="text-lg font-semibold">Belanghebbenden</h2>
                     </div>
-                    {stakeholders && stakeholders.length > 0 ? (
-                        <StakeholderList
-                            stakeholders={stakeholders}
-                            selectedStakeholderId={selectedStakeholderId}
-                            onSelectStakeholder={handleSelectStakeholder}
-                        />
-                    ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                            <p>Geen belanghebbenden beschikbaar</p>
-                        </div>
-                    )}
+                    <div className="flex-1 overflow-y-auto p-4 pt-3">
+                        {stakeholders && stakeholders.length > 0 ? (
+                            <StakeholderList
+                                stakeholders={stakeholders}
+                                selectedStakeholderId={selectedStakeholderId}
+                                onSelectStakeholder={handleSelectStakeholder}
+                            />
+                        ) : (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <p>Geen belanghebbenden beschikbaar</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             );
         }
 
         if (step === 'create' || selectedCaseId) {
             return (
-                <div className="flex-1 overflow-y-auto p-4">
-                    <div className="flex items-center justify-between mb-3">
+                <div className="flex-1 flex flex-col min-h-0">
+                    <div className="flex-shrink-0 flex items-center justify-between p-4 pb-3 border-b border-gray-200 bg-gray-50">
                         <h2 className="text-lg font-semibold">Documenten</h2>
                         {step === 'review' && selectedCaseId && (
                             <Button
@@ -114,18 +116,20 @@ export function Sidebar({
                         )}
                     </div>
 
-                    {documents && documents.length > 0 ? (
-                        <DocumentList
-                            documents={documents}
-                            selectedDocumentId={selectedDocumentId}
-                            onSelectDocument={onSelectDocument || (() => { })}
-                            disabled={step === 'create' && !!selectedCaseId}
-                        />
-                    ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                            <p>Geen documenten beschikbaar</p>
-                        </div>
-                    )}
+                    <div className="flex-1 overflow-y-auto p-4 pt-3">
+                        {documents && documents.length > 0 ? (
+                            <DocumentList
+                                documents={documents}
+                                selectedDocumentId={selectedDocumentId}
+                                onSelectDocument={onSelectDocument || (() => { })}
+                                disabled={step === 'create' && !!selectedCaseId}
+                            />
+                        ) : (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <p>Geen documenten beschikbaar</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             );
         }

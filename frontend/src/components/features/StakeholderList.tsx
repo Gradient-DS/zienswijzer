@@ -47,9 +47,9 @@ export function StakeholderList({
                             <span className="text-xs text-muted-foreground">
                                 {stakeholder.type}
                             </span>
-                            {stakeholder.contactInfo && (
+                            {stakeholder.contact_info && (
                                 <span className="text-xs text-muted-foreground truncate">
-                                    {stakeholder.contactInfo}
+                                    {stakeholder.contact_info}
                                 </span>
                             )}
                         </div>

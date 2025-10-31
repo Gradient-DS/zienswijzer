@@ -54,9 +54,9 @@ export function PDFHighlightOverlay({
     const transformedChunks = pageChunks.map((chunk) => ({
         ...chunk,
         transformedBbox: transformBbox(chunk.bbox, scale),
-        transformedMentions: chunk.stakeholderMentions.map((mention) => ({
+        transformedMentions: chunk.stakeholder_mentions.map((mention) => ({
             ...mention,
-            transformedBbox: transformBbox(mention.mentionBbox, scale),
+            transformedBbox: transformBbox(mention.mention_bbox, scale),
         })),
     }));
 

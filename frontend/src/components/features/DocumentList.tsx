@@ -42,20 +42,20 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument, 
                             {document.title}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
-                            {document.pageCount && (
+                            {document.page_count && (
                                 <span className="text-xs text-muted-foreground">
-                                    {document.pageCount} pagina{document.pageCount !== 1 ? "'s" : ''}
+                                    {document.page_count} pagina{document.page_count !== 1 ? "'s" : ''}
                                 </span>
                             )}
-                            {document.processingStatus && (
+                            {document.parse_status && (
                                 <span className={cn(
                                     'px-1.5 py-0.5 rounded text-xs font-medium',
-                                    document.processingStatus === 'completed' && 'bg-green-100 text-green-800',
-                                    document.processingStatus === 'processing' && 'bg-yellow-100 text-yellow-800',
-                                    document.processingStatus === 'pending' && 'bg-gray-100 text-gray-800',
-                                    document.processingStatus === 'failed' && 'bg-red-100 text-red-800'
+                                    document.parse_status === 'completed' && 'bg-green-100 text-green-800',
+                                    document.parse_status === 'processing' && 'bg-yellow-100 text-yellow-800',
+                                    document.parse_status === 'pending' && 'bg-gray-100 text-gray-800',
+                                    document.parse_status === 'failed' && 'bg-red-100 text-red-800'
                                 )}>
-                                    {document.processingStatus}
+                                    {document.parse_status}
                                 </span>
                             )}
                         </div>

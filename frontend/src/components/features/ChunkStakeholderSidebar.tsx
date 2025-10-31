@@ -79,7 +79,7 @@ export function ChunkStakeholderSidebar({
         }> = [];
 
         chunks.forEach((chunk) => {
-            chunk.stakeholderMentions.forEach((mention) => {
+            chunk.stakeholder_mentions.forEach((mention) => {
                 mentions.push({ mention, chunk });
             });
         });
@@ -88,10 +88,10 @@ export function ChunkStakeholderSidebar({
             if (a.chunk.page !== b.chunk.page) {
                 return a.chunk.page - b.chunk.page;
             }
-            const aY = a.mention.mentionBbox.y;
-            const bY = b.mention.mentionBbox.y;
-            const aX = a.mention.mentionBbox.x;
-            const bX = b.mention.mentionBbox.x;
+            const aY = a.mention.mention_bbox.y;
+            const bY = b.mention.mention_bbox.y;
+            const aX = a.mention.mention_bbox.x;
+            const bX = b.mention.mention_bbox.x;
 
             if (aY !== bY) {
                 return aY - bY;
@@ -252,7 +252,7 @@ export function ChunkStakeholderSidebar({
                                                 Vermelding:
                                             </p>
                                             <p className="text-sm text-gray-800 bg-gray-50 p-2 rounded border border-gray-200 italic">
-                                                "{mention.mentionText}"
+                                                "{mention.mention_text}"
                                             </p>
                                         </div>
                                         <div className="flex items-center justify-between pt-1">
@@ -261,10 +261,10 @@ export function ChunkStakeholderSidebar({
                                                 Pagina {chunk.page}
                                             </span>
                                         </div>
-                                        {mention.stakeholder.contactInfo && (
+                                        {mention.stakeholder.contact_info && (
                                             <div className="pt-1 border-t border-gray-200">
                                                 <p className="text-xs text-gray-500">
-                                                    Contact: {mention.stakeholder.contactInfo}
+                                                    Contact: {mention.stakeholder.contact_info}
                                                 </p>
                                             </div>
                                         )}
