@@ -4,6 +4,7 @@ import sqlite3
 import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 
 
 DB_PATH = Path(__file__).with_name("database.sqlite3")
@@ -125,6 +126,21 @@ def get_workspace_members(workspace_id: str) -> List[Dict[str, Any]]:
         """, (workspace_id,))
         return [dict(row) for row in cursor.fetchall()]
 
+def create_workspace(workspace: Dict[str, Any]) -> None:
+    """Create a new workspace."""
+    with get_connection() as connection:
+        connection.execute("""
+            INSERT INTO Workspaces (id, name, description, created_at, updated_at, owner_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (workspace["id"], workspace["name"], workspace["description"], workspace["created_at"], workspace["updated_at"], workspace["owner_id"]))
+        # Add workspace members
+        for member in workspace["members"]:
+            connection.execute("""
+                INSERT INTO WorkspaceMembers (workspace_id, user_id, is_owner, joined_at)
+                VALUES (?, ?, ?, ?)
+            """, (workspace["id"], member["id"], member["is_owner"], member["joined_at"]))
+        connection.commit()
+
 
 # ---------------------
 # Case functions
@@ -171,6 +187,15 @@ def get_case_by_id(case_id: str) -> Optional[Dict[str, Any]]:
         
         return case
 
+def create_case(case: Dict[str, Any]) -> None:
+    """Create a new case."""
+    with get_connection() as connection:
+        connection.execute("""
+            INSERT INTO Cases (id, title, description, password, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (case["id"], case["title"], case["description"], case["password"], case["created_at"], case["updated_at"]))
+        connection.commit()
+
 
 # ---------------------
 # Document functions
@@ -200,7 +225,24 @@ def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+def create_document(document: Dict[str, Any]) -> None:
+    """Create a new document."""
+    with get_connection() as connection:
+        connection.execute("""
+            INSERT INTO Documents (id, title, description, type, file_path, file_size, page_count, processing_status, uploaded_at, processed_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (document["id"], document["title"], document["description"], document["type"], document["file_path"], document["file_size"], document["page_count"], document["processing_status"], document["uploaded_at"], document["processed_at"], document["created_at"], document["updated_at"]))
+        connection.commit()
 
+
+def add_document_to_case(case_id: str, document_id: str) -> None:
+    """Add a document to a case."""
+    with get_connection() as connection:
+        connection.execute("""
+            INSERT INTO CaseDocuments (case_id, document_id, added_at)
+            VALUES (?, ?, ?)
+        """, (case_id, document_id, datetime.now().isoformat()))
+        connection.commit()
 # ---------------------
 # Chunk functions
 # ---------------------

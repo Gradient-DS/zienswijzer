@@ -3,13 +3,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 #from .utils.text_processor import transform_text
-from db import init_db
+from . import db
 from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
 import shutil
 import uuid
 from .utils.text_processor import transform_text
+import logging
+
+
+logging.basicConfig(
+    level=getattr(logging, "INFO", logging.INFO),
+    format="%(asctime)s %(levelname)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="WOO Backend", version="0.1.0")
 
@@ -24,248 +32,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
-    init_db()
-
-
-# Dummy data for development
-DUMMY_USERS = [
-    {
-        "id": "user_1",
-        "username": "johndoe",
-        "email": "john.doe@example.com",
-        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=john",
-    },
-    {
-        "id": "user_2",
-        "username": "janedoe",
-        "email": "jane.doe@example.com",
-        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=jane",
-    },
-    {
-        "id": "user_3",
-        "username": "bobsmith",
-        "email": "bob.smith@example.com",
-        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=bob",
-    },
-]
-
-DUMMY_WORKSPACES = [
-    {
-        "id": "workspace_1",
-        "name": "Project Alpha",
-        "description": "Main development workspace for Alpha project",
-        "createdAt": "2024-01-15T10:00:00Z",
-        "updatedAt": "2024-01-20T15:30:00Z",
-        "memberCount": 3,
-        "isOwner": True,
-    },
-    {
-        "id": "workspace_2",
-        "name": "Design Team",
-        "description": "UI/UX design collaboration space",
-        "createdAt": "2024-01-10T09:00:00Z",
-        "updatedAt": "2024-01-18T11:45:00Z",
-        "memberCount": 5,
-        "isOwner": False,
-    },
-]
-
-DUMMY_DOCUMENTS = [
-    {
-        "id": "doc_1",
-        "title": "Email Document",
-        "description": "Sample email document for testing",
-        "type": "email",
-        "filePath": "data/email.pdf",
-        "fileSize": 102400,
-        "pageCount": 2,
-        "processingStatus": "completed",
-        "uploadedAt": "2024-01-16T14:00:00Z",
-        "processedAt": "2024-01-16T14:05:00Z",
-        "createdAt": "2024-01-16T14:00:00Z",
-        "updatedAt": "2024-01-20T10:30:00Z",
-    },
-    {
-        "id": "doc_2",
-        "title": "Document PDF",
-        "description": "Sample document PDF for testing",
-        "type": "document",
-        "filePath": "data/document.pdf",
-        "fileSize": 204800,
-        "pageCount": 5,
-        "processingStatus": "completed",
-        "uploadedAt": "2024-01-18T09:15:00Z",
-        "processedAt": "2024-01-18T09:20:00Z",
-        "createdAt": "2024-01-18T09:15:00Z",
-        "updatedAt": "2024-01-19T16:45:00Z",
-    },
-]
-
-DUMMY_CHUNKS = [
-    {
-        "id": "chunk_1",
-        "documentId": "doc_1",
-        "page": 1,
-        "context": "Dear Environmental Agency, We are writing to inform you about the proposed development project in the Utrecht peat meadow area. Local Council has requested a comprehensive environmental impact assessment.",
-        "bbox": {"x": 100, "y": 200, "width": 400, "height": 150},
-    },
-    {
-        "id": "chunk_2",
-        "documentId": "doc_1",
-        "page": 1,
-        "context": "The project will require consultation with Community Group A and Business Association B. We need to schedule meetings with all stakeholders to discuss the potential impacts.",
-        "bbox": {"x": 100, "y": 400, "width": 400, "height": 120},
-    },
-    {
-        "id": "chunk_3",
-        "documentId": "doc_2",
-        "page": 1,
-        "context": "The Environmental Agency has raised concerns about wildlife habitat impact. Local Council must approve the proposal before any construction can begin.",
-        "bbox": {"x": 80, "y": 150, "width": 450, "height": 100},
-    },
-    {
-        "id": "chunk_4",
-        "documentId": "doc_2",
-        "page": 2,
-        "context": "Community Group A has submitted feedback regarding the proposed changes. We need to review their concerns and respond accordingly.",
-        "bbox": {"x": 90, "y": 300, "width": 420, "height": 110},
-    },
-]
-
-DUMMY_STAKEHOLDERS = [
-    {
-        "id": "stakeholder_1",
-        "type": "organization",
-        "name": "Environmental Agency",
-        "contactInfo": "contact@environmental-agency.gov.nl",
-        "createdAt": "2024-01-10T08:00:00Z",
-        "updatedAt": "2024-01-10T08:00:00Z",
-    },
-    {
-        "id": "stakeholder_2",
-        "type": "government",
-        "name": "Local Council",
-        "contactInfo": "info@localcouncil.nl",
-        "createdAt": "2024-01-11T10:00:00Z",
-        "updatedAt": "2024-01-11T10:00:00Z",
-    },
-    {
-        "id": "stakeholder_3",
-        "type": "community",
-        "name": "Community Group A",
-        "contactInfo": "contact@communitygroupa.org",
-        "createdAt": "2024-01-12T09:00:00Z",
-        "updatedAt": "2024-01-12T09:00:00Z",
-    },
-    {
-        "id": "stakeholder_4",
-        "type": "organization",
-        "name": "Business Association B",
-        "contactInfo": "info@businessassocb.nl",
-        "createdAt": "2024-01-13T11:00:00Z",
-        "updatedAt": "2024-01-13T11:00:00Z",
-    },
-]
-
-DUMMY_CHUNK_STAKEHOLDERS = [
-    {
-        "id": "cs_1",
-        "chunkId": "chunk_1",
-        "stakeholderId": "stakeholder_1",
-        "confidence": 0.95,
-        "mentionText": "Environmental Agency",
-        "mentionBbox": {"x": 105, "y": 205, "width": 120, "height": 12},
-        "verified": True,
-        "createdAt": "2024-01-20T10:00:00Z",
-    },
-    {
-        "id": "cs_2",
-        "chunkId": "chunk_1",
-        "stakeholderId": "stakeholder_2",
-        "confidence": 0.92,
-        "mentionText": "Local Council",
-        "mentionBbox": {"x": 390, "y": 205, "width": 90, "height": 12},
-        "verified": True,
-        "createdAt": "2024-01-20T10:00:00Z",
-    },
-    {
-        "id": "cs_3",
-        "chunkId": "chunk_2",
-        "stakeholderId": "stakeholder_3",
-        "confidence": 0.88,
-        "mentionText": "Community Group A",
-        "mentionBbox": {"x": 250, "y": 405, "width": 110, "height": 12},
-        "verified": False,
-        "createdAt": "2024-01-20T10:05:00Z",
-    },
-    {
-        "id": "cs_4",
-        "chunkId": "chunk_2",
-        "stakeholderId": "stakeholder_4",
-        "confidence": 0.85,
-        "mentionText": "Business Association B",
-        "mentionBbox": {"x": 110, "y": 430, "width": 140, "height": 12},
-        "verified": False,
-        "createdAt": "2024-01-20T10:05:00Z",
-    },
-    {
-        "id": "cs_5",
-        "chunkId": "chunk_3",
-        "stakeholderId": "stakeholder_1",
-        "confidence": 0.93,
-        "mentionText": "Environmental Agency",
-        "mentionBbox": {"x": 85, "y": 155, "width": 120, "height": 12},
-        "verified": True,
-        "createdAt": "2024-01-20T10:10:00Z",
-    },
-    {
-        "id": "cs_6",
-        "chunkId": "chunk_3",
-        "stakeholderId": "stakeholder_2",
-        "confidence": 0.90,
-        "mentionText": "Local Council",
-        "mentionBbox": {"x": 370, "y": 155, "width": 90, "height": 12},
-        "verified": True,
-        "createdAt": "2024-01-20T10:10:00Z",
-    },
-    {
-        "id": "cs_7",
-        "chunkId": "chunk_4",
-        "stakeholderId": "stakeholder_3",
-        "confidence": 0.87,
-        "mentionText": "Community Group A",
-        "mentionBbox": {"x": 95, "y": 305, "width": 110, "height": 12},
-        "verified": False,
-        "createdAt": "2024-01-20T10:15:00Z",
-    },
-]
-
-DUMMY_CASES = [
-    {
-        "id": "case_1",
-        "title": "Environmental Impact Study",
-        "description": "Comprehensive environmental assessment for new development",
-        "documentIds": ["doc_1", "doc_2"],
-        "createdAt": "2024-01-15T10:00:00Z",
-        "updatedAt": "2024-01-20T15:30:00Z",
-    },
-    {
-        "id": "case_2",
-        "title": "Community Infrastructure Planning",
-        "description": "Planning documentation for community infrastructure projects",
-        "documentIds": ["doc_1", "doc_2"],
-        "createdAt": "2024-01-10T09:00:00Z",
-        "updatedAt": "2024-01-18T11:45:00Z",
-    },
-    {
-        "id": "case_3",
-        "title": "Urban Development Proposal",
-        "description": "Proposal for urban development in central district",
-        "documentIds": ["doc_1", "doc_2"],
-        "createdAt": "2024-01-22T08:00:00Z",
-        "updatedAt": "2024-01-22T08:00:00Z",
-    },
-]
+    db.init_db()
 
 
 # Pydantic models
@@ -480,50 +247,69 @@ def transform(input_data: TextInput):
 # Authentication routes
 @app.post("/auth/login", response_model=LoginResponse)
 def login(request: LoginRequest):
-    """Dummy login - accepts any username/email combination"""
-    # Find user by username/email or create a dummy one
-    user = None
-    for u in DUMMY_USERS:
-        if u["username"] == request.username or u["email"] == request.email:
-            user = u
-            break
-
+    """Login - finds user by username or email"""
+    # Find user by username or email
+    logger.info(f"Login request: {request}")
+    user = db.get_user_by_username(request.username)
+    logger.info(f"User: {user}")
+    if not user:
+        user = db.get_user_by_email(request.email)
+    
     if not user:
         # Create a dummy user for any login attempt
         user = {
-            "id": f"user_{len(DUMMY_USERS) + 1}",
+            "id": f"user_{len(db.get_users()) + 1}",
             "username": request.username,
             "email": request.email,
             "avatar": f"https://api.dicebear.com/7.x/avataaars/svg?seed={request.username}",
         }
 
-    return LoginResponse(user=User(**user), token=f"dummy_token_{user['id']}_{datetime.now().isoformat()}")
+    return LoginResponse(user=User(**user), token=f"token_{user['id']}_{datetime.now().isoformat()}")
 
 
 @app.post("/auth/logout", response_model=LogoutResponse)
 def logout():
     """Dummy logout - always succeeds"""
+    logger.info("Logout request")
     return LogoutResponse(success=True, message="Logged out successfully")
 
 
 @app.get("/auth/me", response_model=AuthMeResponse)
 def get_current_user():
-    """Dummy current user - returns the first user"""
-    return AuthMeResponse(user=User(**DUMMY_USERS[0]))
+    """Get current user - returns the first user for now"""
+    users = db.get_users()[0]
+    logger.info(f"Users: {users[0]}")
+    if not users:
+        raise HTTPException(status_code=401, detail="No users found")
+    return AuthMeResponse(user=User(**users[0]))
 
 
 # Workspace routes
 @app.get("/workspaces", response_model=WorkspaceListResponse)
 def get_workspaces():
     """Get all workspaces"""
-    return WorkspaceListResponse(workspaces=[Workspace(**ws) for ws in DUMMY_WORKSPACES])
+    workspaces_data = db.get_workspaces()
+    workspaces = []
+    logger.info(f"Workspaces: {workspaces_data}")
+    for ws in workspaces_data:
+        workspaces.append(Workspace(
+            id=ws["id"],
+            name=ws["name"],
+            description=ws.get("description", ""),
+            createdAt=ws["created_at"],
+            updatedAt=ws["updated_at"],
+            memberCount=ws["member_count"],
+            isOwner=bool(ws.get("is_owner", 0))
+        ))
+    return WorkspaceListResponse(workspaces=workspaces)
 
 
 @app.post("/workspaces", response_model=CreateWorkspaceResponse)
 def create_workspace(request: CreateWorkspaceRequest):
     """Create a new workspace"""
+    logger.info(f"Create workspace request: {request}")
     new_workspace = {
-        "id": f"workspace_{len(DUMMY_WORKSPACES) + 1}",
+        "id": f"workspace_{len(db.get_workspaces()) + 1}",
         "name": request.name,
         "description": request.description or "New workspace",
         "createdAt": datetime.now().isoformat() + "Z",
@@ -532,29 +318,51 @@ def create_workspace(request: CreateWorkspaceRequest):
         "isOwner": True,
     }
 
-    # In a real implementation, this would be saved to database
-    # DUMMY_WORKSPACES.append(new_workspace)
-
     return CreateWorkspaceResponse(workspace=Workspace(**new_workspace))
 
 
 @app.get("/workspaces/{workspace_id}", response_model=WorkspaceDetailResponse)
 def get_workspace_detail(workspace_id: str):
     """Get detailed workspace information"""
-    workspace = None
-    for ws in DUMMY_WORKSPACES:
-        if ws["id"] == workspace_id:
-            workspace = ws
-            break
-
+    workspace = db.get_workspace_by_id(workspace_id)
+    logger.info(f"Workspace: {workspace}")
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    # Create detailed workspace with members and documents
+    # Get workspace members
+    members_data = db.get_workspace_members(workspace_id)
+    members = [User(**member) for member in members_data]
+    
+    # Get all documents (for now, return all documents - in a real app, filter by workspace)
+    documents_data = db.get_documents()
+    documents = []
+    for doc in documents_data:
+        documents.append(Document(
+            id=doc["id"],
+            title=doc["title"],
+            description=doc.get("description"),
+            type=doc.get("type"),
+            filePath=doc.get("file_path"),
+            fileSize=doc.get("file_size"),
+            pageCount=doc.get("page_count"),
+            processingStatus=doc.get("processing_status"),
+            uploadedAt=doc.get("uploaded_at"),
+            processedAt=doc.get("processed_at"),
+            createdAt=doc["created_at"],
+            updatedAt=doc["updated_at"]
+        ))
+
+    # Create detailed workspace
     detailed_workspace = WorkspaceDetail(
-        **workspace,
-        members=[User(**u) for u in DUMMY_USERS[: workspace["memberCount"]]],
-        documents=[Document(**doc) for doc in DUMMY_DOCUMENTS],
+        id=workspace["id"],
+        name=workspace["name"],
+        description=workspace.get("description", ""),
+        createdAt=workspace["created_at"],
+        updatedAt=workspace["updated_at"],
+        memberCount=workspace["member_count"],
+        isOwner=bool(workspace.get("is_owner", 0)),
+        members=members,
+        documents=documents
     )
 
     return WorkspaceDetailResponse(workspace=detailed_workspace)
@@ -564,26 +372,57 @@ def get_workspace_detail(workspace_id: str):
 @app.get("/cases", response_model=CaseListResponse)
 def get_cases():
     """Get all cases"""
-    return CaseListResponse(cases=[Case(**case) for case in DUMMY_CASES])
+    cases_data = db.get_cases()
+    cases = []
+    logger.info(f"Cases: {cases_data}")
+    for case in cases_data:
+        cases.append(Case(
+            id=case["id"],
+            title=case["title"],
+            description=case.get("description", ""),
+            documentIds=case["documentIds"],
+            createdAt=case["created_at"],
+            updatedAt=case["updated_at"]
+        ))
+    return CaseListResponse(cases=cases)
 
 
 @app.get("/cases/{case_id}", response_model=CaseDetailResponse)
 def get_case_detail(case_id: str):
     """Get detailed case information"""
-    case = None
-    for c in DUMMY_CASES:
-        if c["id"] == case_id:
-            case = c
-            break
-
+    case = db.get_case_by_id(case_id)
+    logger.info(f"Case: {case}")
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
-    case_documents = [Document(**doc) for doc in DUMMY_DOCUMENTS if doc["id"] in case["documentIds"]]
+    # Get documents for this case
+    case_documents = []
+    for doc_id in case["documentIds"]:
+        doc = db.get_document_by_id(doc_id)
+        if doc:
+            case_documents.append(Document(
+                id=doc["id"],
+                title=doc["title"],
+                description=doc.get("description"),
+                type=doc.get("type"),
+                filePath=doc.get("file_path"),
+                fileSize=doc.get("file_size"),
+                pageCount=doc.get("page_count"),
+                processingStatus=doc.get("processing_status"),
+                uploadedAt=doc.get("uploaded_at"),
+                processedAt=doc.get("processed_at"),
+                createdAt=doc["created_at"],
+                updatedAt=doc["updated_at"]
+            ))
 
     detailed_case = CaseDetail(
-        **case,
-        documents=case_documents,
+        id=case["id"],
+        title=case["title"],
+        description=case.get("description", ""),
+        documentIds=case["documentIds"],
+        createdAt=case["created_at"],
+        updatedAt=case["updated_at"],
+        documents=case_documents
     )
 
     return CaseDetailResponse(case=detailed_case)
@@ -592,16 +431,18 @@ def get_case_detail(case_id: str):
 @app.post("/cases", response_model=CreateCaseResponse)
 def create_case(request: CreateCaseRequest):
     """Create a new case"""
+    logger.info(f"Create case request: {request}")
     new_case = {
-        "id": f"case_{len(DUMMY_CASES) + 1}",
+        "id": f"case_{len(db.get_cases()) + 1}",
         "title": request.title,
         "description": request.description,
         "documentIds": [],
         "createdAt": datetime.now().isoformat() + "Z",
         "updatedAt": datetime.now().isoformat() + "Z",
+        "password": None,
     }
 
-    DUMMY_CASES.append(new_case)
+    db.create_case(new_case)
 
     return CreateCaseResponse(case=Case(**new_case))
 
@@ -610,49 +451,72 @@ def create_case(request: CreateCaseRequest):
 @app.get("/documents")
 def get_documents():
     """Get all documents"""
-    return {"documents": [Document(**doc) for doc in DUMMY_DOCUMENTS]}
+    documents_data = db.get_documents()
+    documents = []
+    logger.info(f"Documents: {documents_data}")
+    for doc in documents_data:
+        documents.append(Document(
+            id=doc["id"],
+            title=doc["title"],
+            description=doc.get("description"),
+            type=doc.get("type"),
+            filePath=doc.get("file_path"),
+            fileSize=doc.get("file_size"),
+            pageCount=doc.get("page_count"),
+            processingStatus=doc.get("processing_status"),
+            uploadedAt=doc.get("uploaded_at"),
+            processedAt=doc.get("processed_at"),
+            createdAt=doc["created_at"],
+            updatedAt=doc["updated_at"]
+        ))
+    return {"documents": documents}
 
 
 @app.get("/documents/{document_id}", response_model=DocumentDetail)
 def get_document_detail(document_id: str):
     """Get detailed document information with chunks and stakeholder mentions"""
-    document = None
-    for doc in DUMMY_DOCUMENTS:
-        if doc["id"] == document_id:
-            document = doc
-            break
-
+    document = db.get_document_by_id(document_id)
+    logger.info(f"Document: {document}")
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    document_chunks = [chunk for chunk in DUMMY_CHUNKS if chunk["documentId"] == document_id]
+    # Get chunks for this document
+    document_chunks = db.get_chunks_by_document(document_id)
 
     chunks_with_mentions = []
     for chunk in document_chunks:
-        chunk_stakeholders = [cs for cs in DUMMY_CHUNK_STAKEHOLDERS if cs["chunkId"] == chunk["id"]]
+        # Get stakeholder mentions for this chunk
+        chunk_stakeholders = db.get_chunk_stakeholders(chunk["id"])
 
         stakeholder_mentions = []
         for cs in chunk_stakeholders:
-            stakeholder = next((s for s in DUMMY_STAKEHOLDERS if s["id"] == cs["stakeholderId"]), None)
+            stakeholder = db.get_stakeholder_by_id(cs["stakeholder_id"])
             if stakeholder:
                 stakeholder_mentions.append(
                     StakeholderMention(
                         id=cs["id"],
-                        chunkId=cs["chunkId"],
-                        stakeholderId=cs["stakeholderId"],
-                        stakeholder=Stakeholder(**stakeholder),
+                        chunkId=cs["chunk_id"],
+                        stakeholderId=cs["stakeholder_id"],
+                        stakeholder=Stakeholder(
+                            id=stakeholder["id"],
+                            type=stakeholder.get("type", ""),
+                            name=stakeholder["name"],
+                            contactInfo=stakeholder.get("contact_info", ""),
+                            createdAt=stakeholder["created_at"],
+                            updatedAt=stakeholder["updated_at"]
+                        ),
                         confidence=cs["confidence"],
-                        mentionText=cs["mentionText"],
-                        mentionBbox=BoundingBox(**cs["mentionBbox"]),
-                        verified=cs["verified"],
-                        createdAt=cs["createdAt"],
+                        mentionText=cs["mention_text"],
+                        mentionBbox=BoundingBox(**cs["mention_bbox"]),
+                        verified=bool(cs["verified"]),
+                        createdAt=cs["created_at"],
                     )
                 )
 
         chunks_with_mentions.append(
             ChunkDetail(
                 id=chunk["id"],
-                documentId=chunk["documentId"],
+                documentId=chunk["document_id"],
                 page=chunk["page"],
                 context=chunk["context"],
                 bbox=BoundingBox(**chunk["bbox"]),
@@ -664,7 +528,18 @@ def get_document_detail(document_id: str):
     pdf_url = f"{base_url}/documents/{document_id}/pdf"
 
     return DocumentDetail(
-        **document,
+        id=document["id"],
+        title=document["title"],
+        description=document.get("description"),
+        type=document.get("type"),
+        filePath=document.get("file_path"),
+        fileSize=document.get("file_size"),
+        pageCount=document.get("page_count"),
+        processingStatus=document.get("processing_status"),
+        uploadedAt=document.get("uploaded_at"),
+        processedAt=document.get("processed_at"),
+        createdAt=document["created_at"],
+        updatedAt=document["updated_at"],
         chunks=chunks_with_mentions,
         pdfUrl=pdf_url,
     )
@@ -673,16 +548,15 @@ def get_document_detail(document_id: str):
 @app.get("/documents/{document_id}/pdf")
 def get_document_pdf(document_id: str):
     """Serve the PDF file for a document"""
-    document = None
-    for doc in DUMMY_DOCUMENTS:
-        if doc["id"] == document_id:
-            document = doc
-            break
-
+    document = db.get_document_by_id(document_id)
+    logger.info(f"Document: {document}")
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    file_path = Path(__file__).parent / document["filePath"]
+    if not document.get("file_path"):
+        raise HTTPException(status_code=404, detail="Document has no file path")
+
+    file_path = Path(__file__).parent / document["file_path"]
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="PDF file not found")
@@ -697,37 +571,44 @@ def get_document_pdf(document_id: str):
 @app.get("/documents/{document_id}/chunks", response_model=ChunkListResponse)
 def get_document_chunks(document_id: str):
     """Get all chunks for a document with stakeholder mentions"""
-    document_chunks = [chunk for chunk in DUMMY_CHUNKS if chunk["documentId"] == document_id]
-
+    document_chunks = db.get_chunks_by_document(document_id)
+    logger.info(f"Document chunks: {document_chunks}")
     if not document_chunks:
         raise HTTPException(status_code=404, detail="Document or chunks not found")
 
     chunks_with_mentions = []
     for chunk in document_chunks:
-        chunk_stakeholders = [cs for cs in DUMMY_CHUNK_STAKEHOLDERS if cs["chunkId"] == chunk["id"]]
+        chunk_stakeholders = db.get_chunk_stakeholders(chunk["id"])
 
         stakeholder_mentions = []
         for cs in chunk_stakeholders:
-            stakeholder = next((s for s in DUMMY_STAKEHOLDERS if s["id"] == cs["stakeholderId"]), None)
+            stakeholder = db.get_stakeholder_by_id(cs["stakeholder_id"])
             if stakeholder:
                 stakeholder_mentions.append(
                     StakeholderMention(
                         id=cs["id"],
-                        chunkId=cs["chunkId"],
-                        stakeholderId=cs["stakeholderId"],
-                        stakeholder=Stakeholder(**stakeholder),
+                        chunkId=cs["chunk_id"],
+                        stakeholderId=cs["stakeholder_id"],
+                        stakeholder=Stakeholder(
+                            id=stakeholder["id"],
+                            type=stakeholder.get("type", ""),
+                            name=stakeholder["name"],
+                            contactInfo=stakeholder.get("contact_info", ""),
+                            createdAt=stakeholder["created_at"],
+                            updatedAt=stakeholder["updated_at"]
+                        ),
                         confidence=cs["confidence"],
-                        mentionText=cs["mentionText"],
-                        mentionBbox=BoundingBox(**cs["mentionBbox"]),
-                        verified=cs["verified"],
-                        createdAt=cs["createdAt"],
+                        mentionText=cs["mention_text"],
+                        mentionBbox=BoundingBox(**cs["mention_bbox"]),
+                        verified=bool(cs["verified"]),
+                        createdAt=cs["created_at"],
                     )
                 )
 
         chunks_with_mentions.append(
             ChunkDetail(
                 id=chunk["id"],
-                documentId=chunk["documentId"],
+                documentId=chunk["document_id"],
                 page=chunk["page"],
                 context=chunk["context"],
                 bbox=BoundingBox(**chunk["bbox"]),
@@ -745,6 +626,7 @@ class UploadDocumentResponse(BaseModel):
 @app.post("/documents/upload", response_model=UploadDocumentResponse)
 async def upload_document(case_id: str, file: UploadFile = File(...)):
     """Upload a PDF document to a case"""
+    logger.info(f"Upload document request: {case_id}, {file.filename}")
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
@@ -752,12 +634,7 @@ async def upload_document(case_id: str, file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
     # Find the case
-    case = None
-    for c in DUMMY_CASES:
-        if c["id"] == case_id:
-            case = c
-            break
-
+    case = db.get_case_by_id(case_id)
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
@@ -793,14 +670,9 @@ async def upload_document(case_id: str, file: UploadFile = File(...)):
         "updatedAt": now,
     }
 
-    # Add to dummy documents list
-    DUMMY_DOCUMENTS.append(new_document)
-
-    # Add to case
-    if doc_id not in case["documentIds"]:
-        case["documentIds"].append(doc_id)
-        case["updatedAt"] = now
-
+    db.create_document(new_document)
+    db.add_document_to_case(case_id, doc_id)
+    
     return UploadDocumentResponse(document=Document(**new_document))
 
 
