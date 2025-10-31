@@ -1,0 +1,116 @@
+services:
+
+  api:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME_API:-${GITHUB_REPOSITORY_OWNER}/woo-api}:${API_VERSION:-latest}
+    container_name: api
+    environment:
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8082}
+      ADMIN_NAME: ${ADMIN_NAME:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      SESSION_TYPE: ${SESSION_TYPE:-filesystem}
+      SESSION_FILE_DIR: ${SESSION_FILE_DIR:-/app/flask_session}
+      SESSION_COOKIE_HTTPONLY: ${SESSION_COOKIE_HTTPONLY:-True}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-True}  # Set to True for HTTPS
+      SESSION_COOKIE_SAMESITE: ${SESSION_COOKIE_SAMESITE:-Lax}
+
+    expose:
+      - "5002"
+    restart: unless-stopped
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /home/deploy/repo/config.yaml:/app/config.yaml:ro
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/flask_session
+
+  frontend:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME_FRONTEND:-${GITHUB_REPOSITORY_OWNER}/woo-frontend}:${FRONTEND_VERSION:-latest}
+    container_name: frontend
+    environment:
+      VITE_APP_FLASK_BACKEND_URL: /api
+    expose:
+      - "3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx-acme.conf:/etc/nginx/conf.d/default.conf:ro
+      - /srv/woo/letsencrypt:/etc/letsencrypt:ro
+      - /srv/woo/certbot-www:/var/www/certbot
+      - /var/log/woo/nginx:/var/log/nginx
+    depends_on:
+      - api
+      - frontend
+    # default nginx command
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+      - CHOWN
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    networks:
+      - internal
+      - edge
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot-prod
+    networks: [edge]
+    volumes:
+      - /srv/woo/letsencrypt:/etc/letsencrypt
+      - /srv/woo/certbot-www:/var/www/certbot
+      - /srv/woo/letsencrypt-log:/var/log/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock
+    entrypoint: >-
+      /bin/sh -c '
+        trap exit TERM;
+        while :; do
+          certbot renew --quiet --deploy-hook "docker exec nginx-prod nginx -s reload" || true;
+          sleep 12h;
+        done'
+    depends_on:
+      - nginx
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  # postgres_data: {} # Not needed for SQLite
+  nginx_conf: {}
+
+networks:
+  internal: {}
+  edge: {}
