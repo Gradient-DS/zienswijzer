@@ -243,6 +243,15 @@ def add_document_to_case(case_id: str, document_id: str) -> None:
             VALUES (?, ?, ?)
         """, (case_id, document_id, datetime.now().isoformat()))
         connection.commit()
+
+def update_document(doc_id: str, document: Dict[str, Any]) -> None:
+    """Update a document."""
+    with get_connection() as connection:
+        connection.execute("""
+            UPDATE Documents SET title = ?, description = ?, type = ?, file_path = ?, file_size = ?, page_count = ?, processing_status = ?, uploaded_at = ?, processed_at = ?, created_at = ?, updated_at = ?
+            WHERE id = ?
+        """, (document["title"], document["description"], document["type"], document["file_path"], document["file_size"], document["page_count"], document["processing_status"], document["uploaded_at"], document["processed_at"], document["created_at"], document["updated_at"], doc_id))
+        connection.commit()
 # ---------------------
 # Chunk functions
 # ---------------------
@@ -309,6 +318,15 @@ def get_stakeholder_by_id(stakeholder_id: str) -> Optional[Dict[str, Any]]:
         """, (stakeholder_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
+
+def create_stakeholder(stakeholder: Dict[str, Any]) -> None:
+    """Create a new stakeholder."""
+    with get_connection() as connection:
+        connection.execute("""
+            INSERT INTO Stakeholders (id, type, name, contact_info, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (stakeholder["id"], stakeholder["type"], stakeholder["name"], stakeholder["contact_info"], stakeholder["created_at"], stakeholder["updated_at"]))
+        connection.commit()
 
 
 # ---------------------
