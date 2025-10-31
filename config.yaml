@@ -1,0 +1,22 @@
+# WOO Backend Configuration
+# This file is mounted into the API container at runtime
+
+# Database configuration
+database:
+  type: sqlite
+  path: /app/db/database.sqlite3
+
+# Email configuration
+email:
+  enabled: true
+  mock_mode: false
+
+# API configuration
+api:
+  host: 0.0.0.0
+  port: 5002
+  debug: false
+
+# Model provider configuration (set via environment variables)
+# MODEL_PROVIDER, HF_KEY, UBIOPS_KEY, etc.
+
