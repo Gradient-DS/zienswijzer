@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS Cases (
     description TEXT,
     password TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    document_ids TEXT[]
 );
 
 -- ====================
@@ -83,14 +84,14 @@ CREATE TABLE IF NOT EXISTS Documents (
     title TEXT NOT NULL,
     description TEXT,
     type TEXT,
+    keywords TEXT,
+    author TEXT,
     file_path TEXT,
     file_size INTEGER,
     page_count INTEGER,
-    processing_status TEXT,
-    uploaded_at TEXT,
-    processed_at TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    parse_status TEXT
 );
 
 -- ====================
