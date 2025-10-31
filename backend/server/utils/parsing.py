@@ -94,7 +94,7 @@ def main(doc_id: str):
     document = db.get_document_by_id(doc_id)
     if not document:
         raise ValueError(f"Document not found: {doc_id}")
-    INPUT_PATH = Path(document["filePath"])
+    INPUT_PATH = Path(document["file_path"])
     
     logger.info(f"Parsing document")
     parser = PDFParser()
