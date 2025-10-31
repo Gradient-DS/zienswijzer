@@ -6,7 +6,7 @@ import { DocumentUploadDialog } from './DocumentUploadDialog';
 import { CaseDropdown } from './CaseDropdown';
 import { DocumentList } from './DocumentList';
 import { StakeholderList } from './StakeholderList';
-import { useCaseStakeholders } from '@/api/stakeholders';
+import { useCaseStakeholders, useStakeholderVerificationStatus } from '@/api/stakeholders';
 import { useCaseStep } from '@/hooks/useCaseStep';
 import type { Document } from '@/types';
 import {
@@ -44,6 +44,7 @@ export function Sidebar({
     const { step } = useCaseStep();
     const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
     const { data: stakeholders } = useCaseStakeholders(selectedCaseId);
+    const { data: verifiedStakeholderIds = new Set<string>() } = useStakeholderVerificationStatus(selectedCaseId);
 
     const handleLogout = () => {
         logout();
@@ -87,6 +88,7 @@ export function Sidebar({
                                 stakeholders={stakeholders}
                                 selectedStakeholderId={selectedStakeholderId}
                                 onSelectStakeholder={handleSelectStakeholder}
+                                verifiedStakeholderIds={verifiedStakeholderIds}
                             />
                         ) : (
                             <div className="text-center py-8 text-muted-foreground">
