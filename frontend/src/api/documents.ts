@@ -8,9 +8,6 @@ interface DocumentDetailResponse {
     };
 }
 
-interface UploadDocumentResponse {
-    document: Document;
-}
 
 export const useDocument = (documentId: string | undefined) => {
     return useQuery({
@@ -30,11 +27,20 @@ export const useUploadDocument = () => {
             const formData = new FormData();
             formData.append('file', file);
 
-            const res = await apiClient.post<UploadDocumentResponse>(
+            const res = await apiClient.post(
                 `/documents/upload?case_id=${caseId}`,
-                formData
+                formData,
+                {
+                    headers: {
+                        // Delete Content-Type to let axios set it automatically with boundary for FormData
+                    },
+                    transformRequest: (data, headers) => {
+                        delete headers['Content-Type'];
+                        return data;
+                    },
+                }
             );
-            return res.data.document;
+            return res.data;
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['cases', variables.caseId] });
