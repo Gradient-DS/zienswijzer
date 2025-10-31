@@ -8,7 +8,7 @@ import {
     DropdownMenuTrigger,
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Briefcase } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Case } from '@/types';
 
@@ -70,8 +70,11 @@ export function CaseDropdown({ selectedCaseId, onCaseSelect }: CaseDropdownProps
                     variant="ghost"
                     className="w-full justify-between gap-2 h-8 pl-2"
                 >
-                    <span className="flex-1 text-left truncate">
-                        {selectedCase ? `Zaak: ${selectedCase.title}` : 'Selecteer zaak'}
+                    <span className="flex-1 text-left truncate flex items-center gap-2">
+                        {selectedCase && (
+                            <Briefcase className="h-4 w-4 flex-shrink-0 text-gray-600" />
+                        )}
+                        {selectedCase ? selectedCase.title : 'Selecteer zaak'}
                     </span>
                     <ChevronDown className="h-4 w-4 flex-shrink-0" />
                 </Button>

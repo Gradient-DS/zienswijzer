@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, useUIStore } from '@/store';
 import { Button } from '@/components/ui/button';
-import { CreateCaseDialog } from './CreateCaseDialog';
 import { DocumentUploadDialog } from './DocumentUploadDialog';
 import { CaseDropdown } from './CaseDropdown';
 import { DocumentList } from './DocumentList';
+import { StakeholderList } from './StakeholderList';
+import { useCaseStakeholders } from '@/api/stakeholders';
+import { useCaseStep } from '@/hooks/useCaseStep';
 import type { Document } from '@/types';
 import {
     Bell,
@@ -38,8 +40,9 @@ export function Sidebar({
     const navigate = useNavigate();
     const { logout } = useAuthStore();
     const { toggleSidebar } = useUIStore();
-    const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+    const { step } = useCaseStep();
     const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+    const { data: stakeholders } = useCaseStakeholders(selectedCaseId);
 
     const handleLogout = () => {
         logout();
@@ -47,7 +50,7 @@ export function Sidebar({
     };
 
     const handleNewCase = () => {
-        setIsCreateDialogOpen(true);
+        navigate('/cases/new?step=create');
         if (isMobile && onClose) {
             onClose();
         }
@@ -60,9 +63,65 @@ export function Sidebar({
         }
     };
 
+    const renderSidebarContent = () => {
+        if (step === 'contact' && selectedCaseId) {
+            return (
+                <div className="flex-1 overflow-y-auto p-4">
+                    <div className="mb-3">
+                        <h2 className="text-lg font-semibold">Belanghebbenden</h2>
+                    </div>
+                    {stakeholders && stakeholders.length > 0 ? (
+                        <StakeholderList
+                            stakeholders={stakeholders}
+                        />
+                    ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <p>Geen belanghebbenden beschikbaar</p>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        if (step === 'create' || selectedCaseId) {
+            return (
+                <div className="flex-1 overflow-y-auto p-4">
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-lg font-semibold">Documenten</h2>
+                        {step === 'review' && selectedCaseId && (
+                            <Button
+                                onClick={handleAddDocument}
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-2"
+                            >
+                                <Plus className="h-4 w-4" />
+                                Toevoegen
+                            </Button>
+                        )}
+                    </div>
+
+                    {documents && documents.length > 0 ? (
+                        <DocumentList
+                            documents={documents}
+                            selectedDocumentId={selectedDocumentId}
+                            onSelectDocument={onSelectDocument || (() => { })}
+                            disabled={step === 'create' && !!selectedCaseId}
+                        />
+                    ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <p>Geen documenten beschikbaar</p>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        return null;
+    };
+
     return (
         <>
-            <CreateCaseDialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} />
             {selectedCaseId && (
                 <DocumentUploadDialog
                     open={isUploadDialogOpen}
@@ -112,34 +171,7 @@ export function Sidebar({
                     </div>
                 </div>
 
-                {selectedCaseId && (
-                    <div className="flex-1 overflow-y-auto p-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <h2 className="text-lg font-semibold">Documenten</h2>
-                            <Button
-                                onClick={handleAddDocument}
-                                variant="outline"
-                                size="sm"
-                                className="flex items-center gap-2"
-                            >
-                                <Plus className="h-4 w-4" />
-                                Toevoegen
-                            </Button>
-                        </div>
-
-                        {documents && documents.length > 0 ? (
-                            <DocumentList
-                                documents={documents}
-                                selectedDocumentId={selectedDocumentId}
-                                onSelectDocument={onSelectDocument || (() => { })}
-                            />
-                        ) : (
-                            <div className="text-center py-8 text-muted-foreground">
-                                <p>Geen documenten beschikbaar</p>
-                            </div>
-                        )}
-                    </div>
-                )}
+                {renderSidebarContent()}
 
                 <div className="flex-shrink-0 p-4 space-y-2 border-t border-gray-200">
                     <Button

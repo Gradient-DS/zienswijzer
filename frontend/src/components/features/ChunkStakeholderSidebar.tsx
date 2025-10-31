@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils';
 
 interface ChunkStakeholderSidebarProps {
     chunks: ChunkDetail[];
-    currentPage: number;
     selectedMentionId?: string | null;
     onMentionClick?: (mention: StakeholderMention) => void;
     onClose?: () => void;
@@ -65,7 +64,6 @@ function VerificationBadge({ verified }: { verified: boolean }) {
 
 export function ChunkStakeholderSidebar({
     chunks,
-    currentPage,
     selectedMentionId,
     onMentionClick,
     onClose,
@@ -74,20 +72,22 @@ export function ChunkStakeholderSidebar({
     const sidebarRef = useRef<HTMLDivElement>(null);
     const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-    const pageMentions = useMemo(() => {
-        const pageChunks = chunks.filter((chunk) => chunk.page === currentPage);
+    const allMentions = useMemo(() => {
         const mentions: Array<{
             mention: StakeholderMention;
             chunk: ChunkDetail;
         }> = [];
 
-        pageChunks.forEach((chunk) => {
+        chunks.forEach((chunk) => {
             chunk.stakeholderMentions.forEach((mention) => {
                 mentions.push({ mention, chunk });
             });
         });
 
         return mentions.sort((a, b) => {
+            if (a.chunk.page !== b.chunk.page) {
+                return a.chunk.page - b.chunk.page;
+            }
             const aY = a.mention.mentionBbox.y;
             const bY = b.mention.mentionBbox.y;
             const aX = a.mention.mentionBbox.x;
@@ -98,7 +98,18 @@ export function ChunkStakeholderSidebar({
             }
             return aX - bX;
         });
-    }, [chunks, currentPage]);
+    }, [chunks]);
+
+    const mentionsByPage = useMemo(() => {
+        const grouped = new Map<number, typeof allMentions>();
+        allMentions.forEach(({ mention, chunk }) => {
+            if (!grouped.has(chunk.page)) {
+                grouped.set(chunk.page, []);
+            }
+            grouped.get(chunk.page)!.push({ mention, chunk });
+        });
+        return grouped;
+    }, [allMentions]);
 
     useEffect(() => {
         if (selectedMentionId && sidebarRef.current) {
@@ -112,9 +123,9 @@ export function ChunkStakeholderSidebar({
                 }, 100);
             }
         }
-    }, [selectedMentionId, pageMentions]);
+    }, [selectedMentionId, allMentions]);
 
-    if (pageMentions.length === 0) {
+    if (allMentions.length === 0) {
         return (
             <div
                 className={cn(
@@ -130,7 +141,7 @@ export function ChunkStakeholderSidebar({
                                     Stakeholder vermeldingen
                                 </h3>
                                 <p className="text-xs text-gray-500 mt-1">
-                                    Pagina {currentPage}
+                                    Alle pagina's
                                 </p>
                             </div>
                             {onClose && (
@@ -148,7 +159,7 @@ export function ChunkStakeholderSidebar({
                     </div>
                     <div className="flex items-center justify-center py-8">
                         <div className="text-sm text-gray-500 text-center">
-                            Geen stakeholder vermeldingen op deze pagina
+                            Geen stakeholder vermeldingen gevonden
                         </div>
                     </div>
                 </div>
@@ -164,7 +175,7 @@ export function ChunkStakeholderSidebar({
                 className
             )}
         >
-            <div className="p-4 space-y-3">
+            <div className="p-4 space-y-4">
                 <div className="pb-2 border-b border-gray-300">
                     <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
@@ -172,8 +183,7 @@ export function ChunkStakeholderSidebar({
                                 Stakeholder vermeldingen
                             </h3>
                             <p className="text-xs text-gray-500 mt-1">
-                                Pagina {currentPage} • {pageMentions.length}{' '}
-                                {pageMentions.length === 1 ? 'vermelding' : 'vermeldingen'}
+                                {allMentions.length} {allMentions.length === 1 ? 'vermelding' : 'vermeldingen'} op {mentionsByPage.size} {mentionsByPage.size === 1 ? 'pagina' : 'pagina\'s'}
                             </p>
                         </div>
                         {onClose && (
@@ -190,71 +200,80 @@ export function ChunkStakeholderSidebar({
                     </div>
                 </div>
 
-                {pageMentions.map(({ mention, chunk }) => {
-                    const color = getStakeholderColor(mention.stakeholder.type);
-                    const isSelected = selectedMentionId === mention.id;
+                {Array.from(mentionsByPage.entries()).map(([pageNum, mentions]) => (
+                    <div key={pageNum} className="space-y-3">
+                        <div className="sticky top-0 bg-gray-50 py-2 px-2 rounded border border-gray-200 -mx-2 z-10">
+                            <h4 className="text-xs font-semibold text-gray-600">
+                                Pagina {pageNum} • {mentions.length} {mentions.length === 1 ? 'vermelding' : 'vermeldingen'}
+                            </h4>
+                        </div>
+                        {mentions.map(({ mention, chunk }) => {
+                            const color = getStakeholderColor(mention.stakeholder.type);
+                            const isSelected = selectedMentionId === mention.id;
 
-                    return (
-                        <Card
-                            key={mention.id}
-                            ref={(el) => {
-                                if (el) {
-                                    cardRefs.current.set(mention.id, el);
-                                } else {
-                                    cardRefs.current.delete(mention.id);
-                                }
-                            }}
-                            className={cn(
-                                'cursor-pointer hover:shadow-md transition-all border-2',
-                                isSelected && 'ring-2 ring-blue-500 ring-offset-2 shadow-lg'
-                            )}
-                            onClick={() => onMentionClick?.(mention)}
-                        >
-                            <CardHeader className="pb-3">
-                                <div className="flex items-start justify-between gap-2">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div
-                                                className="w-3 h-3 rounded-full flex-shrink-0"
-                                                style={{ backgroundColor: color }}
-                                            />
-                                            <h4 className="font-semibold text-sm text-gray-900 truncate">
-                                                {mention.stakeholder.name}
-                                            </h4>
+                            return (
+                                <Card
+                                    key={mention.id}
+                                    ref={(el) => {
+                                        if (el) {
+                                            cardRefs.current.set(mention.id, el);
+                                        } else {
+                                            cardRefs.current.delete(mention.id);
+                                        }
+                                    }}
+                                    className={cn(
+                                        'cursor-pointer hover:shadow-md transition-all border-2',
+                                        isSelected && 'ring-2 ring-blue-500 ring-offset-2 shadow-lg'
+                                    )}
+                                    onClick={() => onMentionClick?.(mention)}
+                                >
+                                    <CardHeader className="pb-3">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <div
+                                                        className="w-3 h-3 rounded-full flex-shrink-0"
+                                                        style={{ backgroundColor: color }}
+                                                    />
+                                                    <h4 className="font-semibold text-sm text-gray-900 truncate">
+                                                        {mention.stakeholder.name}
+                                                    </h4>
+                                                </div>
+                                                <p className="text-xs text-gray-500 capitalize">
+                                                    {mention.stakeholder.type}
+                                                </p>
+                                            </div>
+                                            <ConfidenceBadge confidence={mention.confidence} />
                                         </div>
-                                        <p className="text-xs text-gray-500 capitalize">
-                                            {mention.stakeholder.type}
-                                        </p>
-                                    </div>
-                                    <ConfidenceBadge confidence={mention.confidence} />
-                                </div>
-                            </CardHeader>
-                            <CardContent className="pt-0 space-y-2">
-                                <div>
-                                    <p className="text-xs font-medium text-gray-600 mb-1">
-                                        Vermelding:
-                                    </p>
-                                    <p className="text-sm text-gray-800 bg-gray-50 p-2 rounded border border-gray-200 italic">
-                                        "{mention.mentionText}"
-                                    </p>
-                                </div>
-                                <div className="flex items-center justify-between pt-1">
-                                    <VerificationBadge verified={mention.verified} />
-                                    <span className="text-xs text-gray-500">
-                                        Pagina {chunk.page}
-                                    </span>
-                                </div>
-                                {mention.stakeholder.contactInfo && (
-                                    <div className="pt-1 border-t border-gray-200">
-                                        <p className="text-xs text-gray-500">
-                                            Contact: {mention.stakeholder.contactInfo}
-                                        </p>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    );
-                })}
+                                    </CardHeader>
+                                    <CardContent className="pt-0 space-y-2">
+                                        <div>
+                                            <p className="text-xs font-medium text-gray-600 mb-1">
+                                                Vermelding:
+                                            </p>
+                                            <p className="text-sm text-gray-800 bg-gray-50 p-2 rounded border border-gray-200 italic">
+                                                "{mention.mentionText}"
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center justify-between pt-1">
+                                            <VerificationBadge verified={mention.verified} />
+                                            <span className="text-xs text-gray-500">
+                                                Pagina {chunk.page}
+                                            </span>
+                                        </div>
+                                        {mention.stakeholder.contactInfo && (
+                                            <div className="pt-1 border-t border-gray-200">
+                                                <p className="text-xs text-gray-500">
+                                                    Contact: {mention.stakeholder.contactInfo}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
+                    </div>
+                ))}
             </div>
         </div>
     );
