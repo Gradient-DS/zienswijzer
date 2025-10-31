@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { X, Trash2, ArrowDown, ArrowUp, ArrowRight, CheckCircle2, Check } from 'lucide-react';
+import { X, Trash2, ArrowDown, ArrowUp, ArrowRight, Check } from 'lucide-react';
 import { useVerifyMention, useBulkVerifyMentions, useRemoveMention } from '@/api/verification';
 import { useDocumentCompletionStatus } from '@/api/cases';
 import type { ChunkDetail, StakeholderMention } from '@/types';
@@ -562,7 +562,7 @@ export function ChunkStakeholderSidebar({
                             )
                         ) : (
                             <div className="flex items-center gap-2 py-2 px-3 bg-green-50 border border-green-200 rounded-md">
-                                <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                                <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
                                 <span className="text-xs font-medium text-green-800">
                                     {hasUncheckedChunks ? 'Alle vermeldingen zijn gecontroleerd' : 'Alle documenten zijn gecontroleerd'}
                                 </span>
