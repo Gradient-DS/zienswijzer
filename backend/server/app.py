@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -7,6 +7,8 @@ from . import db
 from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
+import shutil
+import uuid
 from .utils.text_processor import transform_text
 import logging
 

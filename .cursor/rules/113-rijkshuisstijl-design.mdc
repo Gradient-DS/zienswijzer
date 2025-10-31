@@ -1,0 +1,303 @@
+---
+description: Rijkshuisstijl (Dutch Government) design guidelines based on NL Design System architecture
+globs: frontend/**/*
+alwaysApply: false
+---
+
+# Rijkshuisstijl Design Guidelines
+
+This project follows the **Rijkshuisstijl** (Dutch Government) design system, based on the NL Design System architecture. These guidelines ensure consistency with Dutch government design standards for accessibility, clarity, and professionalism.
+
+## Design Philosophy
+
+The Rijkshuisstijl emphasizes:
+- **Clarity**: Clean, unambiguous interfaces
+- **Accessibility**: WCAG 2.1 AA compliance minimum
+- **Consistency**: Predictable patterns across all interfaces
+- **Professionalism**: Government-grade design quality
+
+## Color Palette
+
+### Primary Colors
+
+**Primary Blue (Rijksblauw)**
+- HSL: `hsl(203 100% 35%)` - Primary action color
+- Hex equivalent: `#0064B0`
+- Used for: Primary buttons, links, focus states, important actions
+
+**Primary Foreground**
+- HSL: `hsl(0 0% 100%)` - White text on primary backgrounds
+- Ensures proper contrast on primary blue
+
+### Secondary Colors
+
+**Secondary**
+- HSL: `hsl(210 20% 95%)` - Light gray for secondary actions
+- Used for: Secondary buttons, subtle backgrounds
+
+**Muted**
+- HSL: `hsl(210 15% 96%)` - Very light gray
+- Used for: Disabled states, subtle backgrounds, borders
+
+**Muted Foreground**
+- HSL: `hsl(220 10% 45%)` - Medium gray text
+- Used for: Placeholder text, secondary text, hints
+
+### Semantic Colors
+
+**Destructive**
+- HSL: `hsl(0 84% 50%)` - Red for destructive actions
+- Used for: Delete buttons, error states, warnings
+
+**Border/Input**
+- HSL: `hsl(220 15% 85%)` - Light gray borders
+- Used for: Input borders, card borders, dividers
+
+### Dark Mode
+
+Dark mode colors follow the same principles but with inverted backgrounds:
+- Background: `hsl(220 30% 8%)` - Very dark blue-gray
+- Foreground: `hsl(210 20% 95%)` - Light text
+- Primary: `hsl(203 100% 50%)` - Brighter blue for visibility
+
+## Typography
+
+### Font Family
+
+Use system fonts for optimal performance and consistency:
+```css
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+```
+
+### Font Weights
+
+- **Semibold (600)**: Headings, labels, important text
+- **Medium (500)**: Buttons, emphasis
+- **Regular (400)**: Body text, descriptions
+
+### Line Heights
+
+- **Headings**: `1.3` - Tighter for visual hierarchy
+- **Body**: `1.5` - Comfortable reading experience
+- **Labels**: `1.2` - Compact but readable
+
+## Component Guidelines
+
+### Buttons
+
+**Sizing**
+- Default: `h-10` (40px) - Standard clickable height
+- Small: `h-8` (32px) - Compact actions
+- Large: `h-12` (48px) - Primary actions, important CTAs
+
+**States**
+- Default: Primary blue background with white text
+- Hover: Slightly darker (`/90` opacity)
+- Active: Even darker (`/95` opacity) for tactile feedback
+- Disabled: `opacity-50` with `pointer-events-none`
+
+**Focus States**
+- Ring: `ring-2` with `ring-ring` color
+- Offset: `ring-offset-2` for clear visibility
+- Essential for keyboard navigation accessibility
+
+**Example**
+```tsx
+<Button 
+  variant="default" 
+  size="default"
+  className="w-full"
+>
+  Sign In
+</Button>
+```
+
+### Input Fields
+
+**Sizing**
+- Height: `h-11` (44px) - Comfortable touch target
+- Padding: `px-4 py-2` - Generous padding for readability
+
+**Borders**
+- Border width: `border-2` - Clear, visible boundaries
+- Border color: Uses `border-input` token
+
+**Focus States**
+- Ring: `ring-2` with `ring-ring` (primary blue)
+- Offset: `ring-offset-2` for clear focus indication
+- Outline: `outline-none` to remove default browser outline
+
+**Disabled States**
+- Background: `bg-muted` - Visual indication of disabled state
+- Cursor: `cursor-not-allowed`
+- Opacity: `opacity-50`
+
+**Example**
+```tsx
+<Input
+  type="email"
+  placeholder="name@example.com"
+  className="h-11"
+  aria-describedby="email-error"
+  aria-invalid={hasError}
+/>
+```
+
+### Labels
+
+**Styling**
+- Font weight: `font-semibold` - Clear hierarchy
+- Font size: `text-sm` - Compact but readable
+- Line height: `leading-tight` - Minimal vertical space
+
+**Accessibility**
+- Always use `htmlFor` to associate with inputs
+- Include ARIA attributes when needed
+
+**Example**
+```tsx
+<Label htmlFor="email" className="text-base font-medium">
+  Email
+</Label>
+```
+
+### Forms
+
+**Spacing**
+- Field spacing: `space-y-6` - Clear separation between fields
+- Label-input spacing: `space-y-2` - Tight coupling
+
+**Error Handling**
+- Error container: Uses `bg-destructive/10` with `border-destructive/20`
+- Text color: `text-destructive`
+- Include `role="alert"` and `id` for ARIA linking
+- Link errors to inputs with `aria-describedby`
+
+**Example**
+```tsx
+{error && (
+  <div
+    id="error-message"
+    role="alert"
+    className="p-4 rounded-md bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+  >
+    {error}
+  </div>
+)}
+```
+
+### Cards
+
+**Borders**
+- Border width: `border-2` - Clear definition
+- Shadow: `shadow-lg` - Subtle elevation
+
+**Spacing**
+- Header padding: `p-6` with `pb-6` - Generous spacing
+- Content padding: `p-6 pt-0` - Connected to header
+
+**Example**
+```tsx
+<Card className="w-full border-2 shadow-lg">
+  <CardHeader className="pb-6">
+    <CardTitle>Title</CardTitle>
+  </CardHeader>
+  <CardContent>
+    {/* Content */}
+  </CardContent>
+</Card>
+```
+
+## Layout Guidelines
+
+### Auth Pages
+
+**Background**
+- Use clean white background: `bg-white`
+- Avoid gradients - keep it simple and professional
+
+**Centering**
+- Use flexbox: `flex items-center justify-center`
+- Container: `max-w-md` for optimal form width
+- Padding: `p-4` for mobile spacing
+
+**Example**
+```tsx
+<div className="min-h-screen flex items-center justify-center bg-white p-4">
+  <div className="w-full max-w-md">
+    {/* Content */}
+  </div>
+</div>
+```
+
+## Accessibility Requirements
+
+### WCAG 2.1 AA Compliance
+
+**Color Contrast**
+- Text on primary: Minimum 4.5:1 ratio
+- Large text (18px+): Minimum 3:1 ratio
+- Interactive elements: Clear contrast in all states
+
+**Keyboard Navigation**
+- All interactive elements must be keyboard accessible
+- Focus indicators must be clearly visible
+- Logical tab order throughout the interface
+
+**Screen Readers**
+- Use semantic HTML elements
+- Include ARIA labels and descriptions
+- Associate labels with inputs using `htmlFor`
+- Use `role="alert"` for error messages
+- Use `aria-invalid` for form validation states
+- Use `aria-busy` for loading states
+
+**Touch Targets**
+- Minimum 44x44px (11 Tailwind units) for mobile
+- Adequate spacing between clickable elements
+
+## Best Practices
+
+### Do's
+
+✅ Use semantic HTML elements (`<form>`, `<button>`, `<input>`, etc.)
+✅ Include proper ARIA attributes for accessibility
+✅ Maintain consistent spacing using Tailwind's spacing scale
+✅ Use design tokens from `index.css` for colors
+✅ Ensure proper focus states for all interactive elements
+✅ Test with keyboard navigation
+✅ Use system fonts for optimal performance
+✅ Keep forms simple and clear
+
+### Don'ts
+
+❌ Don't use custom fonts without permission (use system fonts)
+❌ Don't skip focus states or make them hard to see
+❌ Don't use low contrast color combinations
+❌ Don't create tiny touch targets (< 44px)
+❌ Don't use decorative gradients or complex backgrounds
+❌ Don't skip ARIA labels on form elements
+❌ Don't use generic text like "Click here" for buttons
+
+## Design Tokens Reference
+
+All design tokens are defined in `frontend/src/index.css`:
+
+```css
+--color-primary: hsl(203 100% 35%);          /* Rijksblauw */
+--color-primary-foreground: hsl(0 0% 100%);  /* White */
+--color-destructive: hsl(0 84% 50%);         /* Red */
+--color-border: hsl(220 15% 85%);            /* Light gray */
+--color-input: hsl(220 15% 85%);             /* Light gray */
+--color-ring: hsl(203 100% 35%);             /* Focus ring */
+```
+
+## Resources
+
+- **Rijkshuisstijl Community**: https://github.com/nl-design-system/rijkshuisstijl-community
+- **NL Design System**: https://github.com/nl-design-system
+- **WCAG Guidelines**: https://www.w3.org/WAI/WCAG21/quickref/
+
+## Notes
+
+This project uses the unofficial Rijkshuisstijl Community components and design tokens. For official government websites, contact the Dutch Ministry of General Affairs for official branding guidelines and assets.
