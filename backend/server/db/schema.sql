@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS Cases (
     description TEXT,
     password TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    document_ids TEXT[]
 );
 
 -- ====================
