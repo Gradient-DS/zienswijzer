@@ -91,7 +91,16 @@ class EntityExtractor:
         return "TEST"
 
 
-def main(doc_id: str):
+def main(doc_id: str) -> str:
+    """
+    Parse a document and extract its content as markdown.
+    
+    Args:
+        doc_id: The ID of the document to parse
+        
+    Returns:
+        str: Path to the generated markdown file
+    """
     document = db.get_document_by_id(doc_id)
     if not document:
         raise ValueError(f"Document not found: {doc_id}")
@@ -103,18 +112,35 @@ def main(doc_id: str):
     blob = parser.load_pdf(INPUT_PATH)
     results = parser.parse(blob=blob, verbose=True)
 
-    document["title"] = results[0].metadata["title"]
-    document["page_count"] = results[0].metadata["total_pages"]
-    document["keywords"] = results[0].metadata["keywords"]
-    document["author"] = results[0].metadata["author"]
+    # Extract markdown content from results
+    markdown_content = []
+    for page_num, doc in enumerate(results, start=1):
+        markdown_content.append(f"# Page {page_num}\n\n")
+        markdown_content.append(doc.page_content)
+        markdown_content.append("\n\n---\n\n")
+    
+    # Combine all pages into a single markdown string
+    full_markdown = "".join(markdown_content)
+    
+    # Create markdown file path (same name as PDF but with .md extension)
+    markdown_path = INPUT_PATH.with_suffix('.md')
+    
+    # Write markdown to file
+    markdown_path.write_text(full_markdown, encoding='utf-8')
+    logger.info(f"Markdown file created: {markdown_path}")
+
+    # Update document metadata
+    document["title"] = results[0].metadata.get("title", "")
+    document["page_count"] = results[0].metadata.get("total_pages", len(results))
+    document["keywords"] = results[0].metadata.get("keywords", "")
+    document["author"] = results[0].metadata.get("author", "")
     document["parse_status"] = "parsed"
+    document["markdown_path"] = str(markdown_path)
 
     db.update_document(doc_id, document)
 
-    logger.info(f"Document parsed, extracting entities")
-
-    # entity_extractor = EntityExtractor()
-    # entity_extractor.extract(results)
+    logger.info(f"Document parsed successfully")
+    
 
 
 if __name__ == "__main__":

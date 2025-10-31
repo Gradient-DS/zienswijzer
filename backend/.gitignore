@@ -25,5 +25,5 @@ pip-log.txt
 pip-delete-this-directory.txt
 .DS_Store
 
-database.sqlite3
+*.sqlite3
 data

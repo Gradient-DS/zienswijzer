@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS Documents (
     keywords TEXT,
     author TEXT,
     file_path TEXT,
+    markdown_path TEXT,
     file_size INTEGER,
     page_count INTEGER,
     created_at TEXT NOT NULL,
@@ -102,6 +103,7 @@ CREATE TABLE IF NOT EXISTS Stakeholders (
     type TEXT,
     name TEXT NOT NULL,
     contact_info TEXT,
+    publication_status TEXT, -- 'agree', 'disagree', 'pending', or NULL
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -165,8 +167,10 @@ CREATE TABLE IF NOT EXISTS SentEmails (
     tracking_id TEXT, -- Unique tracking ID added to email subject for reply detection
     sent_at TEXT NOT NULL,
     case_id TEXT, -- Optional link to a case
+    stakeholder_id TEXT, -- Optional link to a stakeholder
     created_at TEXT NOT NULL,
-    FOREIGN KEY (case_id) REFERENCES Cases(id)
+    FOREIGN KEY (case_id) REFERENCES Cases(id),
+    FOREIGN KEY (stakeholder_id) REFERENCES Stakeholders(id)
 );
 
 -- ====================

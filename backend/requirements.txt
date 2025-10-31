@@ -30,6 +30,9 @@ PyMuPDF==1.26.5
 pymupdf4llm==0.0.27
 python-dotenv==1.0.0
 python-multipart==0.0.20
+torch>=2.0.0
+transformers==4.48.0
+langchain_pymupdf4llm==0.0.27
 PyYAML==6.0.3
 requests==2.31.0
 requests-toolbelt==1.0.0

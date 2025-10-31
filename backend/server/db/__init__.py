@@ -31,6 +31,7 @@ from .database import (
     get_stakeholders,
     get_stakeholder_by_id,
     create_stakeholder,
+    update_stakeholder,
     # Chunk-Stakeholder functions
     get_chunk_stakeholders,
     get_chunk_stakeholders_by_id,
@@ -86,6 +87,7 @@ __all__ = [
     "get_stakeholders",
     "get_stakeholder_by_id",
     "create_stakeholder",
+    "update_stakeholder",
     # Chunk-Stakeholder functions
     "get_chunk_stakeholders",
     "get_chunk_stakeholders_by_id",
