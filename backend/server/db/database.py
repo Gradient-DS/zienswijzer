@@ -477,6 +477,25 @@ def get_stakeholder_mentions_by_document(document_id: str) -> List[Dict[str, Any
         return mentions
 
 
+def get_case_stakeholders(case_id: str) -> List[Dict[str, Any]]:
+    """Get all unique stakeholders for a case (across all documents in the case)."""
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            SELECT DISTINCT 
+                s.id, s.type, s.name, s.contact_info, s.created_at, s.updated_at
+            FROM Stakeholders s
+            JOIN ChunkStakeholders cs ON s.id = cs.stakeholder_id
+            JOIN Chunks c ON cs.chunk_id = c.id
+            JOIN CaseDocuments cd ON c.document_id = cd.document_id
+            WHERE cd.case_id = ?
+            ORDER BY s.name ASC
+        """,
+            (case_id,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
 def create_chunk_stakeholder(chunk_stakeholder: Dict[str, Any]) -> None:
     """Create a new chunk-stakeholder relationship."""
     with get_connection() as connection:

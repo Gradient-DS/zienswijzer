@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore, useUIStore } from '@/store';
 import { Button } from '@/components/ui/button';
 import { DocumentUploadDialog } from './DocumentUploadDialog';
@@ -38,6 +38,7 @@ export function Sidebar({
     isMobile = false,
 }: SidebarProps) {
     const navigate = useNavigate();
+    const location = useLocation();
     const { logout } = useAuthStore();
     const { toggleSidebar } = useUIStore();
     const { step } = useCaseStep();
@@ -64,7 +65,17 @@ export function Sidebar({
     };
 
     const renderSidebarContent = () => {
-        if (step === 'contact' && selectedCaseId) {
+        if (step === 'belanghebbenden' && selectedCaseId) {
+            const searchParams = new URLSearchParams(location.search);
+            const selectedStakeholderId = searchParams.get('stakeholder') || undefined;
+
+            const handleSelectStakeholder = (stakeholderId: string) => {
+                const newSearchParams = new URLSearchParams(location.search);
+                newSearchParams.set('stakeholder', stakeholderId);
+                newSearchParams.set('step', 'belanghebbenden');
+                navigate(`${location.pathname}?${newSearchParams.toString()}`, { replace: true });
+            };
+
             return (
                 <div className="flex-1 overflow-y-auto p-4">
                     <div className="mb-3">
@@ -73,6 +84,8 @@ export function Sidebar({
                     {stakeholders && stakeholders.length > 0 ? (
                         <StakeholderList
                             stakeholders={stakeholders}
+                            selectedStakeholderId={selectedStakeholderId}
+                            onSelectStakeholder={handleSelectStakeholder}
                         />
                     ) : (
                         <div className="text-center py-8 text-muted-foreground">

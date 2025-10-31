@@ -3,7 +3,8 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useCase } from '@/api/cases';
 import { PDFViewer } from '@/components/features/PDFViewer';
 import { BreadcrumbNavigation } from '@/components/features/BreadcrumbNavigation';
-import { ContactStepPlaceholder } from '@/components/features/ContactStepPlaceholder';
+import { StakeholderDetailView } from '@/components/features/StakeholderDetailView';
+import { useCaseStakeholders } from '@/api/stakeholders';
 import { CreateCaseForm } from '@/components/features/CreateCaseForm';
 import { useUIStore } from '@/store';
 import { useCaseStep } from '@/hooks/useCaseStep';
@@ -16,7 +17,9 @@ export default function CaseDetailPage() {
     const { data: caseData, isLoading, error } = useCase(id);
     const searchParams = new URLSearchParams(location.search);
     const selectedDocumentId = searchParams.get('document') || undefined;
+    const selectedStakeholderId = searchParams.get('stakeholder') || undefined;
     const { step } = useCaseStep();
+    const { data: stakeholders } = useCaseStakeholders(id);
     const { isSidebarOpen } = useUIStore();
     const [isMobile, setIsMobile] = useState(false);
     const hasAutoSelectedRef = useRef<string | undefined>(undefined);
@@ -68,8 +71,27 @@ export default function CaseDetailPage() {
             return <CreateCaseForm caseId={id} />;
         }
 
-        if (step === 'contact') {
-            return <ContactStepPlaceholder />;
+        if (step === 'belanghebbenden') {
+            if (selectedStakeholderId && stakeholders) {
+                const stakeholder = stakeholders.find(s => s.id === selectedStakeholderId);
+                if (stakeholder && id) {
+                    return (
+                        <StakeholderDetailView
+                            caseId={id}
+                            stakeholderId={selectedStakeholderId}
+                            stakeholder={stakeholder}
+                        />
+                    );
+                }
+            }
+            return (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                    <div className="text-center">
+                        <p className="text-lg font-medium mb-2">Geen belanghebbende geselecteerd</p>
+                        <p className="text-sm">Selecteer een belanghebbende uit de lijst om te bekijken</p>
+                    </div>
+                </div>
+            );
         }
 
         if (step === 'review') {
