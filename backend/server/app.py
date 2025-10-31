@@ -663,7 +663,7 @@ def background_parse_document(doc_id: str, page_count: int):
         logger.info(f"Starting background parsing for document {doc_id}")
         parse_pdf(doc_id)
         logger.info(f"Document {doc_id} parsed successfully")
-        
+
         # Generate fake chunks and stakeholders
         chunks = generate_fake_chunks(doc_id, page_count)
         new_stakeholders = generate_fake_stakeholders(num_stakeholders=5)
@@ -705,9 +705,7 @@ def background_parse_document(doc_id: str, page_count: int):
 
 @app.post("/documents/upload", response_model=UploadDocumentResponse)
 async def upload_document(
-    case_id: str, 
-    file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = BackgroundTasks()
+    case_id: str, file: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks()
 ):
     """Upload a PDF document to a case"""
     logger.info(f"Upload document request: {case_id}, {file.filename}")
@@ -759,45 +757,9 @@ async def upload_document(
 
     db.create_document(new_document)
     db.add_document_to_case(case_id, doc_id)
-<<<<<<< HEAD
-    parse_pdf(doc_id)
 
-    # Generate fake chunks and stakeholders
-    try:
-        chunks = generate_fake_chunks(doc_id, page_count)
-        new_stakeholders = generate_fake_stakeholders(num_stakeholders=5)
-
-        # Save chunks to database
-        for chunk in chunks:
-            db.create_chunk(chunk)
-
-        # Save stakeholders to database (avoid duplicates by name)
-        existing_stakeholders_dict = {s["name"]: s for s in db.get_stakeholders()}
-        stakeholders_to_use = []
-
-        for stakeholder in new_stakeholders:
-            if stakeholder["name"] not in existing_stakeholders_dict:
-                db.create_stakeholder(stakeholder)
-                stakeholders_to_use.append(stakeholder)
-            else:
-                stakeholders_to_use.append(existing_stakeholders_dict[stakeholder["name"]])
-
-        # Generate and save chunk-stakeholder relationships
-        chunk_stakeholders = generate_fake_chunk_stakeholders(chunks, stakeholders_to_use)
-        for cs in chunk_stakeholders:
-            db.create_chunk_stakeholder(cs)
-
-        logger.info(
-            f"Generated {len(chunks)} chunks and {len(chunk_stakeholders)} stakeholder mentions for document {doc_id}"
-        )
-    except Exception as e:
-        logger.error(f"Error generating fake chunks/stakeholders: {e}")
-        # Don't fail the upload if fake data generation fails
-=======
-    
     # Run parsing and chunk generation in the background
     background_tasks.add_task(background_parse_document, doc_id, page_count)
->>>>>>> origin/main
 
     return_document = Document(
         id=new_document["id"],

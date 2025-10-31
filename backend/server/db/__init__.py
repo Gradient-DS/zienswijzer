@@ -35,11 +35,6 @@ from .database import (
     get_chunk_stakeholders,
     get_chunk_stakeholders_by_id,
     get_stakeholder_mentions_by_document,
-<<<<<<< HEAD
-    get_case_stakeholders,
-    update_chunk_stakeholder_verified,
-=======
->>>>>>> origin/main
     # OAuth Token functions
     get_oauth_token,
     save_oauth_token,
@@ -91,11 +86,6 @@ __all__ = [
     "get_chunk_stakeholders",
     "get_chunk_stakeholders_by_id",
     "get_stakeholder_mentions_by_document",
-<<<<<<< HEAD
-    "get_case_stakeholders",
-    "update_chunk_stakeholder_verified",
-=======
->>>>>>> origin/main
     # OAuth Token functions
     "get_oauth_token",
     "save_oauth_token",
