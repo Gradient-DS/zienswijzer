@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from '@/components/features/Sidebar';
 import { useUIStore } from '@/store';
+import { useCase } from '@/api/cases';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
 import {
@@ -13,10 +14,23 @@ import {
 
 export default function HomePage() {
     const location = useLocation();
+    const navigate = useNavigate();
     const caseIdMatch = location.pathname.match(/\/cases\/(.+)/);
     const selectedCaseId = caseIdMatch ? caseIdMatch[1] : undefined;
+    const searchParams = new URLSearchParams(location.search);
+    const selectedDocumentId = searchParams.get('document') || undefined;
+    const { data: caseData } = useCase(selectedCaseId);
     const { isSidebarOpen, toggleSidebar, setSidebarOpen } = useUIStore();
     const [isMobile, setIsMobile] = useState(false);
+    const hasAutoSelectedRef = useRef<string | undefined>(undefined);
+
+    const handleSelectDocument = useCallback((documentId: string) => {
+        if (selectedCaseId) {
+            const newSearchParams = new URLSearchParams(location.search);
+            newSearchParams.set('document', documentId);
+            navigate(`${location.pathname}?${newSearchParams.toString()}`, { replace: true });
+        }
+    }, [selectedCaseId, location.pathname, navigate]);
 
     useEffect(() => {
         const checkMobile = () => {
@@ -34,9 +48,24 @@ export default function HomePage() {
         return () => window.removeEventListener('resize', checkMobile);
     }, [setSidebarOpen]);
 
+    useEffect(() => {
+        if (selectedCaseId && caseData?.documents && caseData.documents.length > 0 && !selectedDocumentId) {
+            const firstDocumentId = caseData.documents[0].id;
+            if (hasAutoSelectedRef.current !== selectedCaseId) {
+                hasAutoSelectedRef.current = selectedCaseId;
+                handleSelectDocument(firstDocumentId);
+            }
+        } else if (!selectedCaseId) {
+            hasAutoSelectedRef.current = undefined;
+        }
+    }, [selectedCaseId, caseData?.documents, selectedDocumentId, handleSelectDocument]);
+
     const sidebarContent = (
         <Sidebar
             selectedCaseId={selectedCaseId}
+            documents={caseData?.documents}
+            selectedDocumentId={selectedDocumentId}
+            onSelectDocument={handleSelectDocument}
             isMobile={isMobile}
             onClose={() => setSidebarOpen(false)}
         />

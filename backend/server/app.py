@@ -10,6 +10,13 @@ import shutil
 import uuid
 from server import db
 from server.utils.parsing import main as parse_pdf
+import random
+from server.utils.text_processor import transform_text
+from server.utils.chunk_generator import (
+    generate_fake_chunks,
+    generate_fake_stakeholders,
+    generate_fake_chunk_stakeholders,
+)
 import logging
 
 
@@ -641,6 +648,9 @@ async def upload_document(case_id: str, file: UploadFile = File(...)):
     # Get file size
     file_size = file_path.stat().st_size
 
+    # Dummy page count (assume 3-5 pages for now)
+    page_count = random.randint(3, 5)
+
     # Create document record
     now = datetime.now().isoformat() + "Z"
     new_document = {
@@ -660,8 +670,54 @@ async def upload_document(case_id: str, file: UploadFile = File(...)):
     db.add_document_to_case(case_id, doc_id)
     parse_pdf(doc_id)
     
-    return UploadDocumentResponse(document=Document(**new_document))
+    # Generate fake chunks and stakeholders
+    try:
+        chunks = generate_fake_chunks(doc_id, page_count)
+        new_stakeholders = generate_fake_stakeholders(num_stakeholders=5)
 
+        # Save chunks to database
+        for chunk in chunks:
+            db.create_chunk(chunk)
+
+        # Save stakeholders to database (avoid duplicates by name)
+        existing_stakeholders_dict = {s["name"]: s for s in db.get_stakeholders()}
+        stakeholders_to_use = []
+
+        for stakeholder in new_stakeholders:
+            if stakeholder["name"] not in existing_stakeholders_dict:
+                db.create_stakeholder(stakeholder)
+                stakeholders_to_use.append(stakeholder)
+            else:
+                stakeholders_to_use.append(existing_stakeholders_dict[stakeholder["name"]])
+
+        # Generate and save chunk-stakeholder relationships
+        chunk_stakeholders = generate_fake_chunk_stakeholders(chunks, stakeholders_to_use)
+        for cs in chunk_stakeholders:
+            db.create_chunk_stakeholder(cs)
+
+        logger.info(
+            f"Generated {len(chunks)} chunks and {len(chunk_stakeholders)} stakeholder mentions for document {doc_id}"
+        )
+    except Exception as e:
+        logger.error(f"Error generating fake chunks/stakeholders: {e}")
+        # Don't fail the upload if fake data generation fails
+
+    return_document = Document(
+        id=new_document["id"],
+        title=new_document["title"],
+        description=new_document["description"],
+        type=new_document["type"],
+        filePath=new_document["file_path"],
+        fileSize=new_document["file_size"],
+        pageCount=new_document["page_count"],
+        processingStatus=new_document["processing_status"],
+        uploadedAt=new_document["uploaded_at"],
+        processedAt=new_document["processed_at"],
+        createdAt=new_document["created_at"],
+        updatedAt=new_document["updated_at"],
+    )
+
+    return UploadDocumentResponse(document=return_document)
 
 if __name__ == "__main__":
     import uvicorn

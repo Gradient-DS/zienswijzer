@@ -2,19 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
 import type { Document } from '@/types';
 
-interface DocumentDetailResponse {
-    document: Document & {
-        chunks?: unknown[];
-    };
-}
-
-
 export const useDocument = (documentId: string | undefined) => {
     return useQuery({
         queryKey: ['documents', documentId],
         queryFn: async () => {
-            const res = await apiClient.get<DocumentDetailResponse>(`/documents/${documentId}`);
-            return res.data.document;
+            const res = await apiClient.get<Document>(`/documents/${documentId}`);
+            return res.data;
         },
         enabled: !!documentId,
     });
