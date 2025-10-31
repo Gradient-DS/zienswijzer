@@ -9,29 +9,29 @@ export interface Stakeholder {
     id: string;
     type: string;
     name: string;
-    contactInfo: string;
-    createdAt: string;
-    updatedAt: string;
+    contact_info: string;
+    created_at: string;
+    updated_at: string;
 }
 
 export interface StakeholderMention {
     id: string;
-    chunkId: string;
-    stakeholderId: string;
+    chunk_id: string;
+    stakeholder_id: string;
     stakeholder: Stakeholder;
     confidence: number;
-    mentionText: string;
-    mentionBbox: BoundingBox;
+    mention_text: string;
+    mention_bbox: BoundingBox;
     verified: boolean;
-    createdAt: string;
+    created_at: string;
 }
 
 export interface ChunkDetail {
     id: string;
-    documentId: string;
+    document_id: string;
     page: number;
     context: string;
     bbox: BoundingBox;
-    stakeholderMentions: StakeholderMention[];
+    stakeholder_mentions: StakeholderMention[];
 }
 
