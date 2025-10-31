@@ -36,7 +36,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.on_event("startup")
 def on_startup() -> None:
     db.init_db()
@@ -714,6 +713,36 @@ async def upload_document(case_id: str, file: UploadFile = File(...)):
     )
 
     return UploadDocumentResponse(document=return_document)
+
+# =============================================================================
+# EMAIL INTEGRATION
+# =============================================================================
+# Microsoft Outlook email integration via Microsoft Graph API
+# Provides OAuth authentication and email operations
+#
+# Available endpoints:
+#   - GET  /email/authorize           - Get OAuth URL
+#   - GET  /email/callback            - OAuth callback (automatic)
+#   - GET  /email/status              - Check token status
+#   - POST /email/send                - Send an email
+#   - GET  /email/messages            - List emails
+#   - GET  /email/messages/{id}       - Get email details
+#   - POST /email/messages/{id}/read  - Mark as read/unread
+#   - DELETE /email/revoke            - Revoke access
+#
+# Configuration:
+#   Required environment variables:
+#   - MICROSOFT_CLIENT_ID
+#   - MICROSOFT_CLIENT_SECRET
+#   - MICROSOFT_REDIRECT_URI
+#
+# See backend/server/email/README.md for detailed documentation
+# =============================================================================
+
+from server.email import email_router
+
+app.include_router(email_router)
+
 
 if __name__ == "__main__":
     import uvicorn

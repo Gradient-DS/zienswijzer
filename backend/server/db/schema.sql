@@ -136,6 +136,61 @@ CREATE TABLE IF NOT EXISTS ChunkStakeholders (
 );
 
 -- ====================
+-- Table: OAuthTokens
+-- ====================
+CREATE TABLE IF NOT EXISTS OAuthTokens (
+    user_id TEXT PRIMARY KEY,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT,
+    expires_at REAL NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- ====================
+-- Table: SentEmails
+-- ====================
+CREATE TABLE IF NOT EXISTS SentEmails (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    body_type TEXT DEFAULT 'HTML',
+    to_recipients TEXT NOT NULL, -- JSON array: [{"address": "...", "name": "..."}]
+    cc_recipients TEXT, -- JSON array
+    bcc_recipients TEXT, -- JSON array
+    importance TEXT DEFAULT 'normal',
+    outlook_message_id TEXT, -- Message ID from Outlook (if available)
+    outlook_conversation_id TEXT, -- Conversation ID from Outlook for threading
+    tracking_id TEXT, -- Unique tracking ID added to email subject for reply detection
+    sent_at TEXT NOT NULL,
+    case_id TEXT, -- Optional link to a case
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (case_id) REFERENCES Cases(id)
+);
+
+-- ====================
+-- Table: EmailReplies
+-- ====================
+CREATE TABLE IF NOT EXISTS EmailReplies (
+    id TEXT PRIMARY KEY,
+    sent_email_id TEXT NOT NULL,
+    outlook_message_id TEXT NOT NULL UNIQUE, -- Message ID from Outlook
+    from_address TEXT NOT NULL, -- JSON: {"address": "...", "name": "..."}
+    subject TEXT NOT NULL,
+    body_preview TEXT,
+    body TEXT,
+    body_type TEXT DEFAULT 'HTML',
+    received_at TEXT NOT NULL,
+    is_read INTEGER DEFAULT 0,
+    has_attachments INTEGER DEFAULT 0,
+    importance TEXT DEFAULT 'normal',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (sent_email_id) REFERENCES SentEmails(id)
+);
+
+-- ====================
 -- Indexes for performance
 -- ====================
 CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON WorkspaceMembers(user_id);
@@ -145,3 +200,11 @@ CREATE INDEX IF NOT EXISTS idx_case_documents_document ON CaseDocuments(document
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON Chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_chunk_stakeholders_chunk ON ChunkStakeholders(chunk_id);
 CREATE INDEX IF NOT EXISTS idx_chunk_stakeholders_stakeholder ON ChunkStakeholders(stakeholder_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_tokens_expires_at ON OAuthTokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_sent_emails_user ON SentEmails(user_id);
+CREATE INDEX IF NOT EXISTS idx_sent_emails_case ON SentEmails(case_id);
+CREATE INDEX IF NOT EXISTS idx_sent_emails_sent_at ON SentEmails(sent_at);
+CREATE INDEX IF NOT EXISTS idx_sent_emails_conversation ON SentEmails(outlook_conversation_id);
+CREATE INDEX IF NOT EXISTS idx_email_replies_sent_email ON EmailReplies(sent_email_id);
+CREATE INDEX IF NOT EXISTS idx_email_replies_outlook_message ON EmailReplies(outlook_message_id);
+CREATE INDEX IF NOT EXISTS idx_email_replies_received_at ON EmailReplies(received_at);
