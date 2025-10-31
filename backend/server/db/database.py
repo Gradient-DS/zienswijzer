@@ -26,6 +26,41 @@ def init_db() -> None:
     with get_connection() as connection:
         with open(SCHEMA_PATH, "r", encoding="utf-8") as schema_file:
             connection.executescript(schema_file.read())
+        # Run migrations for existing databases
+        _migrate_database(connection)
+
+
+def _migrate_database(connection: sqlite3.Connection) -> None:
+    """Apply database migrations for existing databases."""
+    cursor = connection.cursor()
+
+    # Check if publication_status column exists in Stakeholders table
+    cursor.execute("PRAGMA table_info(Stakeholders)")
+    columns = [row[1] for row in cursor.fetchall()]
+
+    if "publication_status" not in columns:
+        # Add publication_status column (no default, NULL allowed)
+        cursor.execute(
+            """
+            ALTER TABLE Stakeholders 
+            ADD COLUMN publication_status TEXT
+        """
+        )
+        connection.commit()
+
+    # Check if stakeholder_id column exists in SentEmails table
+    cursor.execute("PRAGMA table_info(SentEmails)")
+    columns = [row[1] for row in cursor.fetchall()]
+
+    if "stakeholder_id" not in columns:
+        # Add stakeholder_id column (no default, NULL allowed)
+        cursor.execute(
+            """
+            ALTER TABLE SentEmails 
+            ADD COLUMN stakeholder_id TEXT
+        """
+        )
+        connection.commit()
 
 
 # ---------------------
@@ -233,7 +268,7 @@ def get_documents() -> List[Dict[str, Any]]:
     with get_connection() as connection:
         cursor = connection.execute(
             """
-            SELECT id, title, description, type, keywords, author, file_path, file_size, page_count,
+            SELECT id, title, description, type, keywords, author, file_path, markdown_path, file_size, page_count,
                    parse_status, created_at, updated_at
             FROM Documents
             ORDER BY created_at DESC
@@ -247,7 +282,7 @@ def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
     with get_connection() as connection:
         cursor = connection.execute(
             """
-            SELECT id, title, description, type, keywords, author, file_path, file_size, page_count,
+            SELECT id, title, description, type, keywords, author, file_path, markdown_path, file_size, page_count,
                    parse_status, created_at, updated_at
             FROM Documents
             WHERE id = ?
@@ -263,8 +298,8 @@ def create_document(document: Dict[str, Any]) -> None:
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO Documents (id, title, description, type, keywords, author, file_path, file_size, page_count, parse_status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO Documents (id, title, description, type, keywords, author, file_path, markdown_path, file_size, page_count, parse_status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 document["id"],
@@ -274,6 +309,7 @@ def create_document(document: Dict[str, Any]) -> None:
                 document["keywords"],
                 document["author"],
                 document["file_path"],
+                document["markdown_path"],
                 document["file_size"],
                 document["page_count"],
                 document["created_at"],
@@ -302,14 +338,16 @@ def update_document(doc_id: str, document: Dict[str, Any]) -> None:
     with get_connection() as connection:
         connection.execute(
             """
-            UPDATE Documents SET title = ?, description = ?, type = ?, file_path = ?, file_size = ?, page_count = ?, parse_status = ?, created_at = ?, updated_at = ?
-            WHERE id = ?
+            UPDATE Documents SET title = ?, description = ?, type = ?, keywords = ?, author = ?, file_path = ?, markdown_path = ?, file_size = ?, page_count = ?, parse_status = ?, created_at = ?, updated_at = ? WHERE id = ?
         """,
             (
                 document["title"],
                 document["description"],
                 document["type"],
+                document["keywords"],
+                document["author"],
                 document["file_path"],
+                document["markdown_path"],
                 document["file_size"],
                 document["page_count"],
                 document["parse_status"],
@@ -399,7 +437,7 @@ def get_stakeholders() -> List[Dict[str, Any]]:
     with get_connection() as connection:
         cursor = connection.execute(
             """
-            SELECT id, type, name, contact_info, created_at, updated_at
+            SELECT id, type, name, contact_info, publication_status, created_at, updated_at
             FROM Stakeholders
             ORDER BY name ASC
         """
@@ -412,7 +450,7 @@ def get_stakeholder_by_id(stakeholder_id: str) -> Optional[Dict[str, Any]]:
     with get_connection() as connection:
         cursor = connection.execute(
             """
-            SELECT id, type, name, contact_info, created_at, updated_at
+            SELECT id, type, name, contact_info, publication_status, created_at, updated_at
             FROM Stakeholders
             WHERE id = ?
         """,
@@ -447,18 +485,44 @@ def create_stakeholder(stakeholder: Dict[str, Any]) -> None:
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO Stakeholders (id, type, name, contact_info, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO Stakeholders (id, type, name, contact_info, publication_status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 stakeholder["id"],
                 stakeholder.get("type"),
                 stakeholder["name"],
                 stakeholder.get("contact_info"),
+                stakeholder.get("publication_status"),
                 stakeholder["created_at"],
                 stakeholder["updated_at"],
             ),
         )
+        connection.commit()
+
+
+def update_stakeholder(stakeholder_id: str, updates: Dict[str, Any]) -> None:
+    """Update a stakeholder's fields."""
+    allowed_fields = ["type", "name", "contact_info", "publication_status"]
+    update_fields = []
+    values = []
+
+    for field in allowed_fields:
+        if field in updates:
+            update_fields.append(f"{field} = ?")
+            values.append(updates[field])
+
+    if not update_fields:
+        return  # No fields to update
+
+    # Always update updated_at
+    update_fields.append("updated_at = ?")
+    values.append(datetime.now().isoformat())
+    values.append(stakeholder_id)
+
+    with get_connection() as connection:
+        query = f"UPDATE Stakeholders SET {', '.join(update_fields)} WHERE id = ?"
+        connection.execute(query, values)
         connection.commit()
 
 
@@ -522,7 +586,8 @@ def get_stakeholder_mentions_by_document(document_id: str) -> List[Dict[str, Any
             """
             SELECT cs.id, cs.chunk_id, cs.stakeholder_id, cs.confidence, cs.mention_text,
                    cs.mention_bbox, cs.verified, cs.created_at,
-                   s.type, s.name, s.contact_info, s.created_at as stakeholder_created_at,
+                   s.type, s.name, s.contact_info, s.publication_status,
+                   s.created_at as stakeholder_created_at,
                    s.updated_at as stakeholder_updated_at
             FROM ChunkStakeholders cs
             JOIN Stakeholders s ON cs.stakeholder_id = s.id
@@ -645,9 +710,9 @@ def save_sent_email(email_data: Dict[str, Any]) -> None:
             INSERT INTO SentEmails (
                 id, user_id, subject, body, body_type, to_recipients, cc_recipients,
                 bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
-                tracking_id, sent_at, case_id, created_at
+                tracking_id, sent_at, case_id, stakeholder_id, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 email_data["id"],
@@ -664,6 +729,7 @@ def save_sent_email(email_data: Dict[str, Any]) -> None:
                 email_data.get("tracking_id"),
                 email_data.get("sent_at", now),
                 case_id,
+                email_data.get("stakeholder_id"),
                 now,
             ),
         )
@@ -676,7 +742,7 @@ def get_sent_emails(user_id: Optional[str] = None, case_id: Optional[str] = None
         query = """
             SELECT id, user_id, subject, body, body_type, to_recipients, cc_recipients,
                    bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
-                   tracking_id, sent_at, case_id, created_at
+                   tracking_id, sent_at, case_id, stakeholder_id, created_at
             FROM SentEmails
             WHERE 1=1
         """
@@ -714,7 +780,7 @@ def get_sent_email_by_id(email_id: str) -> Optional[Dict[str, Any]]:
             """
             SELECT id, user_id, subject, body, body_type, to_recipients, cc_recipients,
                    bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
-                   tracking_id, sent_at, case_id, created_at
+                   tracking_id, sent_at, case_id, stakeholder_id, created_at
             FROM SentEmails
             WHERE id = ?
         """,
@@ -742,7 +808,7 @@ def get_sent_email_by_conversation_id(conversation_id: str) -> Optional[Dict[str
             """
             SELECT id, user_id, subject, body, body_type, to_recipients, cc_recipients,
                    bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
-                   sent_at, case_id, created_at
+                   sent_at, case_id, stakeholder_id, created_at
             FROM SentEmails
             WHERE outlook_conversation_id = ?
             ORDER BY sent_at DESC
