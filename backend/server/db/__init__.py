@@ -33,6 +33,7 @@ from .database import (
     # Chunk-Stakeholder functions
     get_chunk_stakeholders,
     get_stakeholder_mentions_by_document,
+    get_case_stakeholders,
     create_chunk_stakeholder,
 )
 
@@ -69,5 +70,6 @@ __all__ = [
     # Chunk-Stakeholder functions
     "get_chunk_stakeholders",
     "get_stakeholder_mentions_by_document",
+    "get_case_stakeholders",
     "create_chunk_stakeholder",
 ]

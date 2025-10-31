@@ -198,6 +198,10 @@ class StakeholderMention(BaseModel):
     createdAt: str
 
 
+class StakeholderListResponse(BaseModel):
+    stakeholders: List[Stakeholder]
+
+
 class Chunk(BaseModel):
     id: str
     documentId: str
@@ -469,6 +473,31 @@ def create_case(request: CreateCaseRequest):
     }
 
     return CreateCaseResponse(case=Case(**return_case))
+
+
+@app.get("/cases/{case_id}/stakeholders", response_model=StakeholderListResponse)
+def get_case_stakeholders(case_id: str):
+    """Get all unique stakeholders for a case"""
+    case = db.get_case_by_id(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    stakeholders_data = db.get_case_stakeholders(case_id)
+    stakeholders = []
+
+    for stakeholder in stakeholders_data:
+        stakeholders.append(
+            Stakeholder(
+                id=stakeholder["id"],
+                type=stakeholder.get("type", ""),
+                name=stakeholder["name"],
+                contactInfo=stakeholder.get("contact_info", ""),
+                createdAt=stakeholder["created_at"],
+                updatedAt=stakeholder["updated_at"],
+            )
+        )
+
+    return StakeholderListResponse(stakeholders=stakeholders)
 
 
 # Documents routes
