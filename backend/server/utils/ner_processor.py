@@ -13,6 +13,8 @@ from datetime import datetime
 from collections import defaultdict
 from typing import List, Dict, Tuple, Optional
 
+
+
 # Add parent directory to path for imports
 server_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(server_dir))
@@ -29,6 +31,7 @@ class MarkdownNERProcessor:
     def __init__(
         self,
         markdown_path: str,
+        document_id: str,
         entity_types: Optional[List[str]] = None,
         stakeholder_types_to_save: Optional[List[str]] = None,
         min_confidence: float = 0.5,
@@ -51,6 +54,7 @@ class MarkdownNERProcessor:
             pdf_path: Optional path to corresponding PDF file (for extracting bounding boxes)
         """
         self.markdown_path = Path(markdown_path)
+        self.document_id = document_id
         self.entity_types = entity_types
         self.stakeholder_types_to_save = stakeholder_types_to_save
         self.min_confidence = min_confidence
@@ -313,7 +317,7 @@ class MarkdownNERProcessor:
                 "id": stakeholder_id,
                 "type": stakeholder_type,
                 "name": name,
-                "contact_info": None,
+                "contact_info": "Werk nou eens joh",
                 "created_at": now,
                 "updated_at": now
             }
@@ -398,37 +402,37 @@ class MarkdownNERProcessor:
         
         return chunks
     
-    def _create_or_get_document(self) -> str:
-        """Create or get document record. Returns document_id."""
-        file_path = str(self.markdown_path.absolute())
+    # def _create_or_get_document(self) -> str:
+    #     """Create or get document record. Returns document_id."""
+    #     file_path = str(self.markdown_path.absolute())
         
-        # Check if document exists
-        with get_connection() as connection:
-            cursor = connection.execute("""
-                SELECT id FROM Documents WHERE file_path = ?
-            """, (file_path,))
-            row = cursor.fetchone()
-            if row:
-                return row[0]
+    #     # Check if document exists
+    #     with get_connection() as connection:
+    #         cursor = connection.execute("""
+    #             SELECT id FROM Documents WHERE file_path = ?
+    #         """, (file_path,))
+    #         row = cursor.fetchone()
+    #         if row:
+    #             return row[0]
         
-        # Create new document
-        document_id = f"doc_{uuid.uuid4().hex[:16]}"
-        document = {
-            "id": document_id,
-            "title": self.markdown_path.stem,
-            "description": f"Markdown document: {self.markdown_path.name}",
-            "type": "markdown",
-            "file_path": file_path,
-            "file_size": len(self.full_text.encode('utf-8')),
-            "page_count": 1,
-            "processing_status": "completed",
-            "uploaded_at": datetime.now().isoformat(),
-            "processed_at": datetime.now().isoformat(),
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        }
-        create_document(document)
-        return document_id
+    #     # Create new document
+    #     document_id = f"doc_{uuid.uuid4().hex[:16]}"
+    #     document = {
+    #         "id": document_id,
+    #         "title": self.markdown_path.stem,
+    #         "description": f"Markdown document: {self.markdown_path.name}",
+    #         "type": "markdown",
+    #         "file_path": file_path,
+    #         "file_size": len(self.full_text.encode('utf-8')),
+    #         "page_count": 1,
+    #         "processing_status": "completed",
+    #         "uploaded_at": datetime.now().isoformat(),
+    #         "processed_at": datetime.now().isoformat(),
+    #         "created_at": datetime.now().isoformat(),
+    #         "updated_at": datetime.now().isoformat()
+    #     }
+    #     create_document(document)
+    #     return document_id
     
     def _get_chunk_bbox_from_pdf(self, chunk_text: str, chunk_start: int, chunk_end: int) -> Optional[Dict]:
         """
@@ -499,10 +503,10 @@ class MarkdownNERProcessor:
                         
                         if len(block_bbox) == 4 and (block_bbox[2] > block_bbox[0] and block_bbox[3] > block_bbox[1]):
                             return {
-                                "x0": block_bbox[0],
-                                "y0": block_bbox[1],
-                                "x1": block_bbox[2],
-                                "y1": block_bbox[3],
+                                "x": block_bbox[0],
+                                "y": block_bbox[1],
+                                "width": block_bbox[2] - block_bbox[0],
+                                "height": block_bbox[3] - block_bbox[1],
                                 "page": page_num
                             }
             
@@ -515,10 +519,10 @@ class MarkdownNERProcessor:
                     # Get the bounding box of the first occurrence
                     rect = text_instances[0]
                     return {
-                        "x0": rect.x0,
-                        "y0": rect.y0,
-                        "x1": rect.x1,
-                        "y1": rect.y1,
+                        "x": rect.x0,
+                        "y": rect.y0,
+                        "width": rect.x1 - rect.x0,
+                        "height": rect.y1 - rect.y0,
                         "page": page_num
                     }
         
@@ -543,10 +547,10 @@ class MarkdownNERProcessor:
         # If no PDF bbox found, use placeholder
         if chunk_bbox is None:
             chunk_bbox = {
-                "x0": 0,
-                "y0": 0,
-                "x1": 100,
-                "y1": 200,
+                "x": 100.0,
+                "y": 100.0,
+                "width": 100.0,
+                "height": 200.0,
                 "page": page
             }
         
@@ -602,10 +606,10 @@ class MarkdownNERProcessor:
                 # Get the first occurrence (most accurate)
                 rect = text_instances[0]
                 return {
-                    "x0": rect.x0,
-                    "y0": rect.y0,
-                    "x1": rect.x1,
-                    "y1": rect.y1,
+                    "x": rect.x0,
+                    "y": rect.y0,
+                    "width": rect.x1 - rect.x0,
+                    "height": rect.y1 - rect.y0,
                     "page": page
                 }
             
@@ -627,10 +631,10 @@ class MarkdownNERProcessor:
                             span_bbox = span.get("bbox", [])
                             if len(span_bbox) == 4:
                                 return {
-                                    "x0": span_bbox[0],
-                                    "y0": span_bbox[1],
-                                    "x1": span_bbox[2],
-                                    "y1": span_bbox[3],
+                                    "x": span_bbox[0],
+                                    "y": span_bbox[1],
+                                    "width": span_bbox[2] - span_bbox[0],
+                                    "height": span_bbox[3] - span_bbox[1],
                                     "page": page
                                 }
                             
@@ -676,10 +680,10 @@ class MarkdownNERProcessor:
         # If no PDF bbox found, use placeholder
         if mention_bbox is None:
             mention_bbox = {
-                "x0": 0,      # Left coordinate (placeholder)
-                "y0": 0,      # Top coordinate (placeholder)
-                "x1": 100,    # Right coordinate (placeholder)
-                "y1": 12,     # Bottom coordinate (placeholder)
+                "x": 100.0,      # Left coordinate (placeholder)
+                "y": 100.0,      # Top coordinate (placeholder)
+                "width": 200,    # Right coordinate (placeholder)
+                "height": 100.0,     # Bottom coordinate (placeholder)
                 "page": page  # Page number where entity is located
             }
         
@@ -745,10 +749,6 @@ class MarkdownNERProcessor:
         self._print("CREATING CHUNKS AND CHUNK-STAKEHOLDER LINKS")
         self._print("=" * 60)
         
-        # Create or get document
-        document_id = self._create_or_get_document()
-        self._print(f"\nUsing document: {document_id}")
-        
         # Split text into chunks (use PDF text if available, otherwise markdown)
         if self.pdf_text:
             self._print("\nSplitting PDF text into chunks (using PDF for chunking)...")
@@ -781,7 +781,7 @@ class MarkdownNERProcessor:
         for i, chunk in enumerate(text_chunks):
             # Determine page number (for PDF) or use 0 (for markdown)
             chunk_page = get_chunk_page(chunk.get('start', 0), chunk.get('end', 0)) if self.pdf_text else 0
-            chunk_id = self._create_chunk(document_id, chunk, page=chunk_page)
+            chunk_id = self._create_chunk(self.document_id, chunk, page=chunk_page)
             chunk_records[i] = {
                 'chunk_id': chunk_id,
                 'chunk': chunk,

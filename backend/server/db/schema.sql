@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS Documents (
     keywords TEXT,
     author TEXT,
     file_path TEXT,
+    markdown_path TEXT,
     file_size INTEGER,
     page_count INTEGER,
     created_at TEXT NOT NULL,
