@@ -13,17 +13,16 @@ from datetime import datetime
 import msal
 import requests
 import logging
+import base64
+from pathlib import Path
 
 from .config import email_config
+from ..db.database import get_oauth_token, save_oauth_token, delete_oauth_token
 
 logger = logging.getLogger(__name__)
 
 # Router for email endpoints
 email_router = APIRouter(prefix="/email", tags=["email"])
-
-# In-memory token storage (replace with database in production)
-# Format: {user_id: {access_token, refresh_token, expires_at}}
-token_store: Dict[str, Dict[str, Any]] = {}
 
 
 # Pydantic Models
@@ -32,6 +31,7 @@ class EmailAttachment(BaseModel):
     name: str
     contentType: str
     contentBytes: Optional[str] = None  # Base64 encoded
+    filePath: Optional[str] = None  # Path to file on disk (alternative to contentBytes)
     size: Optional[int] = None
 
 
@@ -61,6 +61,29 @@ class SendEmailRequest(BaseModel):
     to: List[EmailAddress]
     subject: str
     body: str
+    cc: Optional[List[EmailAddress]] = None
+    bcc: Optional[List[EmailAddress]] = None
+    bodyType: Optional[str] = "HTML"  # "HTML" or "Text"
+    importance: Optional[str] = "normal"  # "low", "normal", "high"
+    attachments: Optional[List[EmailAttachment]] = None
+
+
+class TextChunk(BaseModel):
+    """Text chunk from a document"""
+    id: str
+    text: str
+    pageNumber: Optional[int] = None
+    documentId: Optional[str] = None
+
+
+class SendWOOEmailRequest(BaseModel):
+    """Request model for sending a WOO (verzoek om inzage) email with template"""
+    to: List[EmailAddress]
+    subject: str
+    requestDescription: str  # Description of the WOO request
+    recipientName: str  # Name to use in greeting
+    senderName: str  # Signature name
+    chunks: List[TextChunk]  # Text chunks to include in email
     cc: Optional[List[EmailAddress]] = None
     bcc: Optional[List[EmailAddress]] = None
     bodyType: Optional[str] = "HTML"  # "HTML" or "Text"
@@ -113,15 +136,48 @@ def get_msal_app():
     )
 
 
+def build_woo_email_body(request: SendWOOEmailRequest) -> str:
+    """
+    Build HTML email body from WOO request template.
+    
+    Args:
+        request: SendWOOEmailRequest containing template data
+    
+    Returns:
+        HTML formatted email body
+    """
+    chunks_html = ""
+    for chunk in request.chunks:
+        page_info = f"Pagina {chunk.pageNumber}" if chunk.pageNumber else "Document"
+        doc_info = f" ({chunk.documentId})" if chunk.documentId else ""
+        chunks_html += f"<li><strong>{page_info}{doc_info}:</strong> {chunk.text}</li>"
+    
+    body = f"""<p>Beste {request.recipientName},</p>
+
+            <p>We hebben een WOO verzoek gekregen over <strong>{request.requestDescription}</strong></p>
+
+            <p>Je komt voor in de volgende teksten die openbaard zullen worden:</p>
+            <ul>
+            {chunks_html}
+            </ul>
+
+            <p>Zie de bijlage(n) voor de volledige documenten.</p>
+
+            <p>Graag ontvangen we een reactie.</p>
+
+            <p>Groeten,<br/>{request.senderName}</p>"""
+    
+    return body
+
+
 def get_access_token(user_id: str) -> Optional[str]:
     """
     Get valid access token for user.
     Refreshes token if expired.
     """
-    if user_id not in token_store:
+    token_data = get_oauth_token(user_id)
+    if not token_data:
         return None
-    
-    token_data = token_store[user_id]
     
     # Check if token is expired
     expires_at = token_data.get("expires_at", 0)
@@ -138,12 +194,14 @@ def get_access_token(user_id: str) -> Optional[str]:
         result = app.acquire_token_by_refresh_token(refresh_token, scopes=email_config.scopes)
         
         if "access_token" in result:
-            # Update token store
-            token_store[user_id] = {
-                "access_token": result["access_token"],
-                "refresh_token": result.get("refresh_token", refresh_token),
-                "expires_at": datetime.now().timestamp() + result.get("expires_in", 3600),
-            }
+            # Update token in database
+            new_expires_at = datetime.now().timestamp() + result.get("expires_in", 3600)
+            save_oauth_token(
+                user_id=user_id,
+                access_token=result["access_token"],
+                refresh_token=result.get("refresh_token", refresh_token),
+                expires_at=new_expires_at
+            )
             return result["access_token"]
     except Exception as e:
         logger.error(f"Failed to refresh token for user {user_id}: {e}")
@@ -197,6 +255,8 @@ def make_graph_request(
             params=params
         )
         
+        logger.debug(f"Graph API response status: {response.status_code}")
+        
         if response.status_code >= 400:
             logger.error(f"Graph API error: {response.status_code} - {response.text}")
             raise HTTPException(
@@ -204,17 +264,38 @@ def make_graph_request(
                 detail=f"Microsoft Graph API error: {response.text}"
             )
         
-        # Some endpoints return 204 No Content
-        if response.status_code == 204:
+        # Some endpoints return 202 Accepted or 204 No Content with empty body
+        if response.status_code in (202, 204):
+            logger.info(f"Graph API returned {response.status_code} with no content")
             return {"success": True}
         
-        return response.json()
+        # For other success codes, try to parse JSON if there's content
+        if not response.text or response.text.strip() == "":
+            logger.info(f"Graph API returned {response.status_code} with empty body")
+            return {"success": True}
+        
+        try:
+            return response.json()
+        except ValueError as e:
+            logger.error(f"Failed to parse JSON response: {e}, Response text: {response.text}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Invalid JSON response from Microsoft Graph API: {str(e)}"
+            )
     
     except requests.RequestException as e:
         logger.error(f"Request to Graph API failed: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to communicate with Microsoft Graph API: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in make_graph_request: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error communicating with Microsoft Graph API: {str(e)}"
         )
 
 
@@ -286,12 +367,14 @@ def oauth_callback(code: Optional[str] = None, state: Optional[str] = None, erro
                 detail=f"Failed to acquire token: {result.get('error_description')}"
             )
         
-        # Store tokens
-        token_store[user_id] = {
-            "access_token": result["access_token"],
-            "refresh_token": result.get("refresh_token"),
-            "expires_at": datetime.now().timestamp() + result.get("expires_in", 3600),
-        }
+        # Store tokens in database
+        expires_at = datetime.now().timestamp() + result.get("expires_in", 3600)
+        save_oauth_token(
+            user_id=user_id,
+            access_token=result["access_token"],
+            refresh_token=result.get("refresh_token"),
+            expires_at=expires_at
+        )
         
         # Get user's email address
         user_info = make_graph_request(user_id, "me")
@@ -324,10 +407,10 @@ def get_token_status(user_id: str):
     Returns:
         Token status and user email if available
     """
-    if user_id not in token_store:
+    token_data = get_oauth_token(user_id)
+    if not token_data:
         return TokenStatusResponse(hasToken=False)
     
-    token_data = token_store[user_id]
     expires_at = token_data.get("expires_at", 0)
     
     # Try to get user email
@@ -389,15 +472,49 @@ def send_email(user_id: str, email_request: SendEmailRequest):
     
     # Add attachments if provided
     if email_request.attachments:
-        message["message"]["attachments"] = [
-            {
+        attachments = []
+        for attachment in email_request.attachments:
+            attachment_data = {
                 "@odata.type": "#microsoft.graph.fileAttachment",
                 "name": attachment.name,
                 "contentType": attachment.contentType,
-                "contentBytes": attachment.contentBytes
             }
-            for attachment in email_request.attachments
-        ]
+            
+            # Get content bytes - either from contentBytes or by reading from filePath
+            content_bytes = attachment.contentBytes
+            
+            if not content_bytes and attachment.filePath:
+                try:
+                    file_path = Path(attachment.filePath)
+                    if not file_path.exists():
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"File not found: {attachment.filePath}"
+                        )
+                    
+                    # Read file and encode to base64
+                    with open(file_path, "rb") as f:
+                        file_content = f.read()
+                        content_bytes = base64.b64encode(file_content).decode("utf-8")
+                    
+                    logger.info(f"Read attachment from file: {attachment.filePath}")
+                except Exception as e:
+                    logger.error(f"Failed to read attachment file {attachment.filePath}: {e}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Failed to read attachment file: {str(e)}"
+                    )
+            
+            if not content_bytes:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Attachment must have either contentBytes or filePath"
+                )
+            
+            attachment_data["contentBytes"] = content_bytes
+            attachments.append(attachment_data)
+        
+        message["message"]["attachments"] = attachments
     
     try:
         # Send email using Graph API
@@ -421,6 +538,40 @@ def send_email(user_id: str, email_request: SendEmailRequest):
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+
+@email_router.post("/send/woo", response_model=SendEmailResponse)
+def send_woo_email(user_id: str, email_request: SendWOOEmailRequest):
+    """
+    Send a WOO (verzoek om inzage) email via Microsoft Outlook with template.
+    
+    The email body is automatically generated from the provided template fields
+    (recipientName, requestDescription, chunks, senderName).
+    
+    Args:
+        user_id: User identifier
+        email_request: WOO email request with template data
+    
+    Returns:
+        Success status and message ID
+    """
+    # Build the email body from template
+    body = build_woo_email_body(email_request)
+    
+    # Convert SendWOOEmailRequest to SendEmailRequest
+    send_request = SendEmailRequest(
+        to=email_request.to,
+        subject=email_request.subject,
+        body=body,
+        cc=email_request.cc,
+        bcc=email_request.bcc,
+        bodyType=email_request.bodyType,
+        importance=email_request.importance,
+        attachments=email_request.attachments
+    )
+    
+    # Use the existing send_email logic
+    return send_email(user_id, send_request)
 
 
 @email_router.get("/messages", response_model=EmailListResponse)
@@ -625,8 +776,8 @@ def revoke_access(user_id: str):
     Returns:
         Success status
     """
-    if user_id in token_store:
-        del token_store[user_id]
+    deleted = delete_oauth_token(user_id)
+    if deleted:
         logger.info(f"Revoked email access for user {user_id}")
         return {"success": True, "message": "Email access revoked"}
     
