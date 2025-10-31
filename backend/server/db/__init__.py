@@ -31,6 +31,10 @@ from .database import (
     # Chunk-Stakeholder functions
     get_chunk_stakeholders,
     get_stakeholder_mentions_by_document,
+    # OAuth Token functions
+    get_oauth_token,
+    save_oauth_token,
+    delete_oauth_token,
 )
 
 __all__ = [
@@ -64,4 +68,8 @@ __all__ = [
     # Chunk-Stakeholder functions
     "get_chunk_stakeholders",
     "get_stakeholder_mentions_by_document",
+    # OAuth Token functions
+    "get_oauth_token",
+    "save_oauth_token",
+    "delete_oauth_token",
 ]

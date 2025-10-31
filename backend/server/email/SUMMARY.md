@@ -187,21 +187,21 @@ See `QUICKSTART.md` for complete Azure app registration and setup instructions.
 - Easy to integrate with existing auth system
 - Flexible for different user management approaches
 
-### 5. **In-Memory Token Storage**
-- Simple for development/testing
-- Clearly marked for production upgrade
-- Easy to replace with database storage
+### 5. **Persistent Token Storage**
+- Tokens stored in SQLite database
+- Survives server restarts
+- Automatic token refresh when expired
 
 ## Security Notes
 
-### Current Implementation (Development)
+### Current Implementation
 - ✅ OAuth 2.0 for secure authorization
 - ✅ Token refresh for extended sessions
-- ⚠️ In-memory token storage (not persistent)
+- ✅ Persistent token storage in database
 - ⚠️ No user authentication (trusts user_id parameter)
 
 ### Production Requirements
-- 🔒 Store tokens in database (encrypted)
+- 🔒 Encrypt tokens at rest (currently stored in plaintext)
 - 🔒 Add authentication middleware
 - 🔒 Validate user_id matches authenticated user
 - 🔒 Use HTTPS for all requests
@@ -369,7 +369,8 @@ Before deploying to production:
 
 - [ ] Azure app configured with production redirect URI
 - [ ] Environment variables set securely
-- [ ] Token storage moved to database
+- [x] Token storage moved to database
+- [ ] Token encryption at rest implemented
 - [ ] Authentication middleware added
 - [ ] HTTPS enabled
 - [ ] Rate limiting implemented
@@ -393,9 +394,10 @@ You now have a fully functional email integration that:
 - ✅ Reads emails from any folder
 - ✅ Manages email operations (mark as read, etc.)
 - ✅ Is compatible with your existing FastAPI app
+- ✅ Stores tokens persistently in database
+- ✅ Survives server restarts
 - ✅ Is well-documented and tested
-- ✅ Is ready for development use
-- ⚠️ Needs security enhancements for production
+- ⚠️ Needs additional security enhancements for production
 
 **To get started:** See `QUICKSTART.md`
 

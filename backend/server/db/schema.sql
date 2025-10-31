@@ -135,6 +135,18 @@ CREATE TABLE IF NOT EXISTS ChunkStakeholders (
 );
 
 -- ====================
+-- Table: OAuthTokens
+-- ====================
+CREATE TABLE IF NOT EXISTS OAuthTokens (
+    user_id TEXT PRIMARY KEY,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT,
+    expires_at REAL NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- ====================
 -- Indexes for performance
 -- ====================
 CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON WorkspaceMembers(user_id);
@@ -144,3 +156,4 @@ CREATE INDEX IF NOT EXISTS idx_case_documents_document ON CaseDocuments(document
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON Chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_chunk_stakeholders_chunk ON ChunkStakeholders(chunk_id);
 CREATE INDEX IF NOT EXISTS idx_chunk_stakeholders_stakeholder ON ChunkStakeholders(stakeholder_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_tokens_expires_at ON OAuthTokens(expires_at);

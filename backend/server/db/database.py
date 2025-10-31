@@ -361,3 +361,52 @@ def get_stakeholder_mentions_by_document(document_id: str) -> List[Dict[str, Any
             mentions.append(mention)
         
         return mentions
+
+
+# ---------------------
+# OAuth Token functions
+# ---------------------
+
+def get_oauth_token(user_id: str) -> Optional[Dict[str, Any]]:
+    """Get OAuth token for a user."""
+    with get_connection() as connection:
+        cursor = connection.execute("""
+            SELECT user_id, access_token, refresh_token, expires_at, created_at, updated_at
+            FROM OAuthTokens
+            WHERE user_id = ?
+        """, (user_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def save_oauth_token(user_id: str, access_token: str, refresh_token: Optional[str], expires_at: float) -> None:
+    """Save or update OAuth token for a user."""
+    now = datetime.now().isoformat()
+    with get_connection() as connection:
+        # Check if token exists
+        cursor = connection.execute("SELECT user_id FROM OAuthTokens WHERE user_id = ?", (user_id,))
+        exists = cursor.fetchone() is not None
+        
+        if exists:
+            # Update existing token
+            connection.execute("""
+                UPDATE OAuthTokens
+                SET access_token = ?, refresh_token = ?, expires_at = ?, updated_at = ?
+                WHERE user_id = ?
+            """, (access_token, refresh_token, expires_at, now, user_id))
+        else:
+            # Insert new token
+            connection.execute("""
+                INSERT INTO OAuthTokens (user_id, access_token, refresh_token, expires_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, access_token, refresh_token, expires_at, now, now))
+        
+        connection.commit()
+
+
+def delete_oauth_token(user_id: str) -> bool:
+    """Delete OAuth token for a user. Returns True if token was deleted."""
+    with get_connection() as connection:
+        cursor = connection.execute("DELETE FROM OAuthTokens WHERE user_id = ?", (user_id,))
+        connection.commit()
+        return cursor.rowcount > 0
