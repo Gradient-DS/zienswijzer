@@ -10,7 +10,13 @@ from datetime import datetime
 from pathlib import Path
 import shutil
 import uuid
+import random
 from .utils.text_processor import transform_text
+from .utils.chunk_generator import (
+    generate_fake_chunks,
+    generate_fake_stakeholders,
+    generate_fake_chunk_stakeholders,
+)
 import logging
 
 
@@ -682,6 +688,9 @@ async def upload_document(case_id: str = Query(...), file: UploadFile = File(...
     # Get file size
     file_size = file_path.stat().st_size
 
+    # Dummy page count (assume 3-5 pages for now)
+    page_count = random.randint(3, 5)
+
     # Create document record
     now = datetime.now().isoformat() + "Z"
     new_document = {
@@ -691,7 +700,7 @@ async def upload_document(case_id: str = Query(...), file: UploadFile = File(...
         "type": "document",
         "file_path": str(file_path.relative_to(Path(__file__).parent)),
         "file_size": file_size,
-        "page_count": 1,  # Would need PDF parsing to get actual page count
+        "page_count": page_count,
         "processing_status": "completed",
         "uploaded_at": now,
         "processed_at": now,
@@ -701,6 +710,38 @@ async def upload_document(case_id: str = Query(...), file: UploadFile = File(...
 
     db.create_document(new_document)
     db.add_document_to_case(case_id, doc_id)
+
+    # Generate fake chunks and stakeholders
+    try:
+        chunks = generate_fake_chunks(doc_id, page_count)
+        new_stakeholders = generate_fake_stakeholders(num_stakeholders=5)
+
+        # Save chunks to database
+        for chunk in chunks:
+            db.create_chunk(chunk)
+
+        # Save stakeholders to database (avoid duplicates by name)
+        existing_stakeholders_dict = {s["name"]: s for s in db.get_stakeholders()}
+        stakeholders_to_use = []
+
+        for stakeholder in new_stakeholders:
+            if stakeholder["name"] not in existing_stakeholders_dict:
+                db.create_stakeholder(stakeholder)
+                stakeholders_to_use.append(stakeholder)
+            else:
+                stakeholders_to_use.append(existing_stakeholders_dict[stakeholder["name"]])
+
+        # Generate and save chunk-stakeholder relationships
+        chunk_stakeholders = generate_fake_chunk_stakeholders(chunks, stakeholders_to_use)
+        for cs in chunk_stakeholders:
+            db.create_chunk_stakeholder(cs)
+
+        logger.info(
+            f"Generated {len(chunks)} chunks and {len(chunk_stakeholders)} stakeholder mentions for document {doc_id}"
+        )
+    except Exception as e:
+        logger.error(f"Error generating fake chunks/stakeholders: {e}")
+        # Don't fail the upload if fake data generation fails
 
     return_document = Document(
         id=new_document["id"],
