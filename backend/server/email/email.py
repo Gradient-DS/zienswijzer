@@ -33,12 +33,148 @@ from ..db.database import (
     get_chunks_by_document,
     get_chunk_stakeholders,
     get_document_by_id,
+    update_stakeholder,
 )
+from ..reply_classification.classification import get_classifier, CANDIDATE_LABELS
 
 logger = logging.getLogger(__name__)
 
 # Router for email endpoints
 email_router = APIRouter(prefix="/email", tags=["email"])
+
+
+# Helper function to extract only the reply text (not quoted original message)
+def extract_reply_text(email_body: str) -> str:
+    """
+    Extract only the new reply text from an email, removing quoted original message.
+    
+    Args:
+        email_body: Full email body including quoted text
+        
+    Returns:
+        Only the new reply text
+    """
+    import re
+    
+    # Strip HTML tags first
+    clean_text = re.sub(r'<[^>]+>', '', email_body)
+    # Normalize whitespace but keep structure
+    clean_text = re.sub(r'&nbsp;', ' ', clean_text)
+    clean_text = clean_text.strip()
+    
+    # Common patterns that indicate the start of quoted/original message
+    quote_patterns = [
+        r'[-_]{3,}.*?Original Message.*?[-_]{3,}',  # -----Original Message-----
+        r'On .+ wrote:',  # On [date], [person] wrote:
+        r'From:.*?Sent:.*?To:',  # Outlook-style header (relaxed, multiline)
+        r'^\s*>.*$',  # Lines starting with >
+        r'Begin forwarded message:',  # Forwarded messages
+        r'_{30,}',  # Long underscore separator (30+ underscores)
+        r'From:\s*\S+\s*Sent:',  # From: [name] Sent: (without requiring newlines)
+    ]
+    
+    # Try each pattern and take text before the first match
+    earliest_quote_pos = len(clean_text)
+    
+    for pattern in quote_patterns:
+        match = re.search(pattern, clean_text, re.MULTILINE | re.IGNORECASE | re.DOTALL)
+        if match:
+            earliest_quote_pos = min(earliest_quote_pos, match.start())
+    
+    # Extract only the reply text (before any quoted content)
+    reply_text = clean_text[:earliest_quote_pos].strip()
+    
+    # Remove lines that start with > (quoted lines)
+    reply_lines = []
+    for line in reply_text.split('\n'):
+        if not line.strip().startswith('>'):
+            reply_lines.append(line)
+    
+    return '\n'.join(reply_lines).strip()
+
+
+# Helper function for sentiment analysis and stakeholder status update
+def analyze_reply_and_update_stakeholder(reply_body: str, stakeholder_id: str, threshold: float) -> Optional[Dict[str, Any]]:
+    """
+    Analyze reply sentiment and update stakeholder publication status.
+    
+    Args:
+        reply_body: The body text of the email reply
+        stakeholder_id: ID of the stakeholder who sent the reply
+        threshold: Confidence threshold for classification
+        
+    Returns:
+        Dictionary with analysis results including classification, confidence, scores, and status
+    """
+    try:
+        # Get classifier
+        classifier = get_classifier()
+        
+        # Extract only the reply text (not quoted original message)
+        clean_text = extract_reply_text(reply_body)
+        
+        if not clean_text:
+            logger.warning(f"Empty reply body for stakeholder {stakeholder_id}, setting status to pending")
+            update_stakeholder(stakeholder_id, {"publication_status": "pending"})
+            return {
+                "reply_text": reply_body[:200],
+                "classification": "none",
+                "confidence": 0.0,
+                "all_scores": {},
+                "publication_status": "pending"
+            }
+        
+        # Perform classification
+        result = classifier(clean_text, candidate_labels=CANDIDATE_LABELS)
+        
+        top_label = result["labels"][0]
+        top_score = result["scores"][0]
+        
+        # Create score dictionary for all labels
+        all_scores = {
+            label: score 
+            for label, score in zip(result["labels"], result["scores"])
+        }
+        
+        logger.info(f"Sentiment analysis for stakeholder {stakeholder_id}: {top_label} ({top_score:.2f})")
+        
+        # Determine publication status based on sentiment and threshold
+        if top_score >= threshold:
+            # Confidence is high enough to accept the classification
+            if top_label == "agrees to publish":
+                publication_status = "agree"
+            else:  # "objects to publication"
+                publication_status = "disagree"
+        else:
+            # Confidence is below threshold, treat as uncertain/disagree
+            publication_status = "disagree"
+        
+        # Update stakeholder publication status
+        update_stakeholder(stakeholder_id, {"publication_status": publication_status})
+        logger.info(f"Updated stakeholder {stakeholder_id} publication status to: {publication_status}")
+        
+        return {
+            "reply_text": clean_text[:500],  # Truncate for response
+            "classification": top_label,
+            "confidence": top_score,
+            "all_scores": all_scores,
+            "publication_status": publication_status
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to analyze reply sentiment for stakeholder {stakeholder_id}: {e}")
+        # On error, set to pending as a safe default
+        try:
+            update_stakeholder(stakeholder_id, {"publication_status": "pending"})
+        except Exception as update_error:
+            logger.error(f"Failed to update stakeholder status to pending: {update_error}")
+        return {
+            "reply_text": reply_body[:200],
+            "classification": "error",
+            "confidence": 0.0,
+            "all_scores": {},
+            "publication_status": "pending"
+        }
 
 
 # Pydantic Models
@@ -184,6 +320,7 @@ class SentEmail(BaseModel):
     trackingId: Optional[str] = None
     sentAt: str
     caseId: Optional[str] = None
+    stakeholderId: Optional[str] = None
     createdAt: str
 
 
@@ -217,6 +354,7 @@ class SentEmailDetail(BaseModel):
     toRecipients: List[EmailAddress]
     ccRecipients: Optional[List[EmailAddress]] = None
     bccRecipients: Optional[List[EmailAddress]] = None
+    stakeholderId: Optional[str] = None
     importance: str
     outlookMessageId: Optional[str] = None
     outlookConversationId: Optional[str] = None
@@ -234,13 +372,24 @@ class SentEmailListResponse(BaseModel):
     total: int
 
 
+class SentimentAnalysisResult(BaseModel):
+    """Result of sentiment analysis on a reply"""
+    
+    reply_text: str
+    classification: str
+    confidence: float
+    all_scores: Dict[str, float]
+    publication_status: str
+
+
 class SyncRepliesResponse(BaseModel):
     """Response model for syncing replies"""
 
     success: bool
     message: str
-    newReplies: int
-    updatedReplies: int
+    new_replies: int
+    updated_replies: int
+    sentiment_analysis: Optional[List[SentimentAnalysisResult]] = None
 
 
 class AddReplyRequest(BaseModel):
@@ -525,7 +674,7 @@ def get_token_status(user_id: str):
 
 
 @email_router.post("/send", response_model=SendEmailResponse)
-def send_email(user_id: str, email_request: SendEmailRequest, case_id: Optional[str] = None):
+def send_email(user_id: str, email_request: SendEmailRequest, case_id: Optional[str] = None, stakeholder_id: Optional[str] = None):
     """
     Send an email via Microsoft Outlook.
 
@@ -533,6 +682,7 @@ def send_email(user_id: str, email_request: SendEmailRequest, case_id: Optional[
         user_id: User identifier
         email_request: Email content and recipients
         case_id: Optional case ID to associate with this email
+        stakeholder_id: Optional stakeholder ID to associate with this email
 
     Returns:
         Success status and message ID
@@ -664,6 +814,7 @@ def send_email(user_id: str, email_request: SendEmailRequest, case_id: Optional[
                 "tracking_id": tracking_id,  # Store the tracking ID for reply detection
                 "sent_at": datetime.now().isoformat(),
                 "case_id": case_id,
+                "stakeholder_id": stakeholder_id,
             }
             save_sent_email(email_data)
             logger.info(f"Saved sent email to database: {sent_email_id}")
@@ -861,8 +1012,8 @@ def send_stakeholder_email(request: SendStakeholderEmailRequest):
             attachments=attachments if attachments else None,
         )
 
-        # Send email using existing logic
-        return send_email(request.user_id, send_request, case_id=request.case_id)
+        # Send email using existing logic with stakeholder_id
+        return send_email(request.user_id, send_request, case_id=request.case_id, stakeholder_id=request.stakeholder_id)
 
     except HTTPException:
         raise
@@ -1107,6 +1258,7 @@ def get_sent_emails_list(user_id: Optional[str] = None, case_id: Optional[str] =
                     trackingId=email_data.get("tracking_id"),
                     sentAt=email_data["sent_at"],
                     caseId=email_data.get("case_id"),
+                    stakeholderId=email_data.get("stakeholder_id"),
                     createdAt=email_data["created_at"],
                 )
             )
@@ -1173,6 +1325,7 @@ def get_sent_email_detail(email_id: str):
             bccRecipients=(
                 [EmailAddress(**r) for r in email_data["bcc_recipients"]] if email_data.get("bcc_recipients") else None
             ),
+            stakeholderId=email_data.get("stakeholder_id"),
             importance=email_data["importance"],
             outlookMessageId=email_data.get("outlook_message_id"),
             outlookConversationId=email_data.get("outlook_conversation_id"),
@@ -1195,15 +1348,19 @@ def get_sent_email_detail(email_id: str):
 
 
 @email_router.post("/sent/{email_id}/sync-replies", response_model=SyncRepliesResponse)
-def sync_email_replies(email_id: str):
+def sync_email_replies(email_id: str, threshold: float = 0.5):
     """
     Sync replies from Outlook for a specific sent email.
 
-    This endpoint fetches new replies from Outlook based on the conversation ID
-    and saves them to the database.
+    This endpoint fetches new replies from Outlook based on the conversation ID,
+    saves them to the database, performs sentiment analysis, and updates stakeholder
+    publication status based on the analysis result.
 
     Args:
         email_id: Sent email identifier
+        threshold: Confidence threshold for sentiment classification (default: 0.5)
+                   - If confidence >= threshold: classification is accepted
+                   - If confidence < threshold: treated as uncertain/disagree
 
     Returns:
         Sync status with counts of new and updated replies
@@ -1240,18 +1397,18 @@ def sync_email_replies(email_id: str):
                     return SyncRepliesResponse(
                         success=True,
                         message="Cannot sync replies: user not authenticated with Outlook. Please authorize email access first.",
-                        newReplies=0,
-                        updatedReplies=0,
+                        new_replies=0,
+                        updated_replies=0,
                     )
                 else:
                     logger.warning(f"Graph API error while syncing conversation: {e.detail}")
                     return SyncRepliesResponse(
-                        success=True, message=f"Could not sync replies: {e.detail}", newReplies=0, updatedReplies=0
+                        success=True, message=f"Could not sync replies: {e.detail}", new_replies=0, updated_replies=0
                     )
             except Exception as e:
                 logger.warning(f"Unexpected error while syncing conversation: {e}")
                 return SyncRepliesResponse(
-                    success=True, message="Could not sync replies (unexpected error)", newReplies=0, updatedReplies=0
+                    success=True, message="Could not sync replies (unexpected error)", new_replies=0, updated_replies=0
                 )
         else:
             # No conversation ID - search for emails containing the tracking ID
@@ -1262,8 +1419,8 @@ def sync_email_replies(email_id: str):
                     return SyncRepliesResponse(
                         success=True,
                         message="Cannot sync replies: email has no tracking ID",
-                        newReplies=0,
-                        updatedReplies=0,
+                        new_replies=0,
+                        updated_replies=0,
                     )
 
                 tracking_tag = f"[WOO-{tracking_id}]"
@@ -1296,8 +1453,8 @@ def sync_email_replies(email_id: str):
                     return SyncRepliesResponse(
                         success=True,
                         message=f"No emails found with tracking ID {tracking_id}. Checked {inbox_count} inbox messages.",
-                        newReplies=0,
-                        updatedReplies=0,
+                        new_replies=0,
+                        updated_replies=0,
                     )
 
                 # Sort messages by received time (oldest first)
@@ -1314,41 +1471,60 @@ def sync_email_replies(email_id: str):
                     return SyncRepliesResponse(
                         success=True,
                         message="Cannot sync replies: user not authenticated with Outlook. Please authorize email access first.",
-                        newReplies=0,
-                        updatedReplies=0,
+                        new_replies=0,
+                        updated_replies=0,
                     )
                 else:
                     logger.warning(f"Graph API error while searching for tracking ID: {e.detail}")
                     return SyncRepliesResponse(
                         success=True,
                         message=f"Could not search for replies: {e.detail}",
-                        newReplies=0,
-                        updatedReplies=0,
+                        new_replies=0,
+                        updated_replies=0,
                     )
             except Exception as e:
                 logger.warning(f"Unexpected error while searching for tracking ID: {e}")
                 return SyncRepliesResponse(
                     success=True,
                     message="Could not search for replies (unexpected error)",
-                    newReplies=0,
-                    updatedReplies=0,
+                    new_replies=0,
+                    updated_replies=0,
                 )
 
         new_replies = 0
         updated_replies = 0
+        sentiment_results = []
 
         # Process each message in the conversation
-        for msg in messages.get("value", []):
+        conversation_messages = messages.get("value", [])
+        
+        # Get stakeholder email to filter replies
+        to_recipients = email_data.get("to_recipients", [])
+        stakeholder_email = ""
+        if to_recipients and isinstance(to_recipients, list):
+            stakeholder_email = to_recipients[0].get("address", "").lower() if to_recipients else ""
+        
+        for idx, msg in enumerate(conversation_messages):
             msg_id = msg.get("id")
 
-            # Skip if this is the original sent message
-            if msg_id == email_data.get("outlook_message_id"):
+            # Skip the first message (that's always the original sent email)
+            if idx == 0:
+                logger.debug(f"Skipping first message in conversation (original sent email)")
                 continue
+            
+            # Get sender info
+            from_addr = msg.get("from", {}).get("emailAddress", {})
+            from_email = from_addr.get("address", "").lower()
+            
+            # Only process messages FROM the stakeholder
+            if stakeholder_email and from_email != stakeholder_email:
+                logger.debug(f"Skipping message from {from_email} (not from stakeholder {stakeholder_email})")
+                continue
+            
+            logger.info(f"Processing reply from stakeholder: {from_email}")
 
             # Check if reply already exists
             existing_reply = get_email_reply_by_outlook_id(msg_id)
-
-            from_addr = msg.get("from", {}).get("emailAddress", {})
             body_content = msg.get("body", {})
 
             reply_data = {
@@ -1372,14 +1548,26 @@ def sync_email_replies(email_id: str):
                 new_replies += 1
 
             save_email_reply(reply_data)
+            
+            # If this email is associated with a stakeholder, perform sentiment analysis
+            stakeholder_id = email_data.get("stakeholder_id")
+            if stakeholder_id and not existing_reply:
+                # Only analyze new replies (not updates)
+                reply_body = reply_data.get("body", "")
+                if reply_body:
+                    logger.info(f"Analyzing sentiment for new reply from stakeholder {stakeholder_id}")
+                    analysis_result = analyze_reply_and_update_stakeholder(reply_body, stakeholder_id, threshold)
+                    if analysis_result:
+                        sentiment_results.append(analysis_result)
 
         logger.info(f"Synced replies for email {email_id}: {new_replies} new, {updated_replies} updated")
 
         return SyncRepliesResponse(
             success=True,
             message=f"Successfully synced replies: {new_replies} new, {updated_replies} updated",
-            newReplies=new_replies,
-            updatedReplies=updated_replies,
+            new_replies=new_replies,
+            updated_replies=updated_replies,
+            sentiment_analysis=sentiment_results if sentiment_results else None,
         )
 
     except HTTPException:
@@ -1390,15 +1578,17 @@ def sync_email_replies(email_id: str):
 
 
 @email_router.post("/sent/sync-all-replies", response_model=SyncRepliesResponse)
-def sync_all_email_replies(user_id: str):
+def sync_all_email_replies(user_id: str, threshold: float = 0.5):
     """
     Sync replies from Outlook for all sent emails by a user.
 
     This endpoint fetches new replies from Outlook for all sent emails
-    that have a conversation ID and saves them to the database.
+    that have a conversation ID, saves them to the database, performs
+    sentiment analysis, and updates stakeholder publication status.
 
     Args:
         user_id: User identifier
+        threshold: Confidence threshold for sentiment classification (default: 0.5)
 
     Returns:
         Sync status with total counts of new and updated replies
@@ -1410,6 +1600,7 @@ def sync_all_email_replies(user_id: str):
         total_new = 0
         total_updated = 0
         synced_count = 0
+        sentiment_results = []
 
         for email_data in emails_data:
             conversation_id = email_data.get("outlook_conversation_id")
@@ -1431,17 +1622,35 @@ def sync_all_email_replies(user_id: str):
                 )
 
                 # Process each message in the conversation
-                for msg in messages.get("value", []):
+                conversation_messages = messages.get("value", [])
+                
+                # Get stakeholder email to filter replies
+                to_recipients = email_data.get("to_recipients", [])
+                stakeholder_email = ""
+                if to_recipients and isinstance(to_recipients, list):
+                    stakeholder_email = to_recipients[0].get("address", "").lower() if to_recipients else ""
+                
+                for idx, msg in enumerate(conversation_messages):
                     msg_id = msg.get("id")
 
-                    # Skip if this is the original sent message
-                    if msg_id == email_data.get("outlook_message_id"):
+                    # Skip the first message (that's always the original sent email)
+                    if idx == 0:
+                        logger.debug(f"Skipping first message in conversation (original sent email)")
                         continue
+                    
+                    # Get sender info
+                    from_addr = msg.get("from", {}).get("emailAddress", {})
+                    from_email = from_addr.get("address", "").lower()
+                    
+                    # Only process messages FROM the stakeholder
+                    if stakeholder_email and from_email != stakeholder_email:
+                        logger.debug(f"Skipping message from {from_email} (not from stakeholder {stakeholder_email})")
+                        continue
+                    
+                    logger.info(f"Processing reply from stakeholder: {from_email}")
 
                     # Check if reply already exists
                     existing_reply = get_email_reply_by_outlook_id(msg_id)
-
-                    from_addr = msg.get("from", {}).get("emailAddress", {})
                     body_content = msg.get("body", {})
 
                     reply_data = {
@@ -1465,6 +1674,17 @@ def sync_all_email_replies(user_id: str):
                         total_new += 1
 
                     save_email_reply(reply_data)
+                    
+                    # If this email is associated with a stakeholder, perform sentiment analysis
+                    stakeholder_id = email_data.get("stakeholder_id")
+                    if stakeholder_id and not existing_reply:
+                        # Only analyze new replies (not updates)
+                        reply_body = reply_data.get("body", "")
+                        if reply_body:
+                            logger.info(f"Analyzing sentiment for new reply from stakeholder {stakeholder_id}")
+                            analysis_result = analyze_reply_and_update_stakeholder(reply_body, stakeholder_id, threshold)
+                            if analysis_result:
+                                sentiment_results.append(analysis_result)
 
                 synced_count += 1
 
@@ -1477,8 +1697,9 @@ def sync_all_email_replies(user_id: str):
         return SyncRepliesResponse(
             success=True,
             message=f"Successfully synced {synced_count} email conversations: {total_new} new replies, {total_updated} updated",
-            newReplies=total_new,
-            updatedReplies=total_updated,
+            new_replies=total_new,
+            updated_replies=total_updated,
+            sentiment_analysis=sentiment_results if sentiment_results else None,
         )
 
     except HTTPException:
@@ -1594,8 +1815,8 @@ def add_manual_reply(email_id: str, reply_request: AddReplyRequest):
             return SyncRepliesResponse(
                 success=False,
                 message="Reply with this Outlook message ID already exists",
-                newReplies=0,
-                updatedReplies=0,
+                new_replies=0,
+                updated_replies=0,
             )
 
         # Create reply data
@@ -1619,7 +1840,7 @@ def add_manual_reply(email_id: str, reply_request: AddReplyRequest):
 
         logger.info(f"Manually added reply {reply_data['id']} to email {email_id}")
 
-        return SyncRepliesResponse(success=True, message="Reply added successfully", newReplies=1, updatedReplies=0)
+        return SyncRepliesResponse(success=True, message="Reply added successfully", new_replies=1, updated_replies=0)
 
     except HTTPException:
         raise

@@ -45,6 +45,18 @@ def _migrate_database(connection: sqlite3.Connection) -> None:
             ADD COLUMN publication_status TEXT
         """)
         connection.commit()
+    
+    # Check if stakeholder_id column exists in SentEmails table
+    cursor.execute("PRAGMA table_info(SentEmails)")
+    columns = [row[1] for row in cursor.fetchall()]
+    
+    if "stakeholder_id" not in columns:
+        # Add stakeholder_id column (no default, NULL allowed)
+        cursor.execute("""
+            ALTER TABLE SentEmails 
+            ADD COLUMN stakeholder_id TEXT
+        """)
+        connection.commit()
 
 
 # ---------------------
@@ -644,9 +656,9 @@ def save_sent_email(email_data: Dict[str, Any]) -> None:
             INSERT INTO SentEmails (
                 id, user_id, subject, body, body_type, to_recipients, cc_recipients,
                 bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
-                tracking_id, sent_at, case_id, created_at
+                tracking_id, sent_at, case_id, stakeholder_id, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 email_data["id"],
@@ -663,6 +675,7 @@ def save_sent_email(email_data: Dict[str, Any]) -> None:
                 email_data.get("tracking_id"),
                 email_data.get("sent_at", now),
                 case_id,
+                email_data.get("stakeholder_id"),
                 now,
             ),
         )
@@ -675,7 +688,7 @@ def get_sent_emails(user_id: Optional[str] = None, case_id: Optional[str] = None
         query = """
             SELECT id, user_id, subject, body, body_type, to_recipients, cc_recipients,
                    bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
-                   tracking_id, sent_at, case_id, created_at
+                   tracking_id, sent_at, case_id, stakeholder_id, created_at
             FROM SentEmails
             WHERE 1=1
         """
@@ -713,7 +726,7 @@ def get_sent_email_by_id(email_id: str) -> Optional[Dict[str, Any]]:
             """
             SELECT id, user_id, subject, body, body_type, to_recipients, cc_recipients,
                    bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
-                   tracking_id, sent_at, case_id, created_at
+                   tracking_id, sent_at, case_id, stakeholder_id, created_at
             FROM SentEmails
             WHERE id = ?
         """,
@@ -741,7 +754,7 @@ def get_sent_email_by_conversation_id(conversation_id: str) -> Optional[Dict[str
             """
             SELECT id, user_id, subject, body, body_type, to_recipients, cc_recipients,
                    bcc_recipients, importance, outlook_message_id, outlook_conversation_id,
-                   sent_at, case_id, created_at
+                   sent_at, case_id, stakeholder_id, created_at
             FROM SentEmails
             WHERE outlook_conversation_id = ?
             ORDER BY sent_at DESC
