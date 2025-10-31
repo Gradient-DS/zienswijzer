@@ -2,22 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
 import type { Document } from '@/types';
 
-interface DocumentDetailResponse {
-    document: Document & {
-        chunks?: unknown[];
-    };
-}
-
-interface UploadDocumentResponse {
-    document: Document;
-}
-
 export const useDocument = (documentId: string | undefined) => {
     return useQuery({
         queryKey: ['documents', documentId],
         queryFn: async () => {
-            const res = await apiClient.get<DocumentDetailResponse>(`/documents/${documentId}`);
-            return res.data.document;
+            const res = await apiClient.get<Document>(`/documents/${documentId}`);
+            return res.data;
         },
         enabled: !!documentId,
     });
@@ -30,11 +20,20 @@ export const useUploadDocument = () => {
             const formData = new FormData();
             formData.append('file', file);
 
-            const res = await apiClient.post<UploadDocumentResponse>(
+            const res = await apiClient.post(
                 `/documents/upload?case_id=${caseId}`,
-                formData
+                formData,
+                {
+                    headers: {
+                        // Delete Content-Type to let axios set it automatically with boundary for FormData
+                    },
+                    transformRequest: (data, headers) => {
+                        delete headers['Content-Type'];
+                        return data;
+                    },
+                }
             );
-            return res.data.document;
+            return res.data;
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['cases', variables.caseId] });
