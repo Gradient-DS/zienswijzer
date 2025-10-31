@@ -27,6 +27,7 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
     const [containerWidth, setContainerWidth] = useState<number>(0);
     const [selectedMentionId, setSelectedMentionId] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     const { data: document, isLoading: documentLoading } = useDocument(documentId);
     const pdfUrl = getDocumentPdfUrl(documentId);
@@ -83,10 +84,16 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
     }
 
     const handleMentionClick = (mention: StakeholderMention) => {
-        if (selectedMentionId === mention.id && isChunkSidebarOpen) {
-            setSelectedMentionId(null);
-            setChunkSidebarOpen(false);
-        } else {
+        if (!document?.chunks) return;
+
+        const chunkWithMention = document.chunks.find((c) =>
+            c.stakeholderMentions.some((m) => m.id === mention.id)
+        );
+
+        if (chunkWithMention) {
+            if (chunkWithMention.page !== pageNumber) {
+                setPageNumber(chunkWithMention.page);
+            }
             setSelectedMentionId(mention.id);
             setChunkSidebarOpen(true);
         }
@@ -99,17 +106,56 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
     }, [isChunkSidebarOpen, selectedMentionId]);
 
     useEffect(() => {
-        if (selectedMentionId && document?.chunks && isChunkSidebarOpen && document.chunks.length > 0) {
+        if (selectedMentionId && document?.chunks && document.chunks.length > 0) {
             const chunkWithMention = document.chunks.find((c) =>
                 c.stakeholderMentions.some((m) => m.id === selectedMentionId)
             );
 
             if (chunkWithMention && chunkWithMention.page !== pageNumber) {
                 setSelectedMentionId(null);
-                setChunkSidebarOpen(false);
             }
         }
-    }, [pageNumber, document?.chunks, selectedMentionId, isChunkSidebarOpen, setChunkSidebarOpen]);
+    }, [pageNumber, document?.chunks, selectedMentionId]);
+
+    useEffect(() => {
+        if (selectedMentionId && document?.chunks && scrollContainerRef.current && pageWidth > 0 && pageHeight > 0) {
+            const chunkWithMention = document.chunks.find((c) =>
+                c.stakeholderMentions.some((m) => m.id === selectedMentionId)
+            );
+
+            if (chunkWithMention && chunkWithMention.page === pageNumber) {
+                const mention = chunkWithMention.stakeholderMentions.find((m) => m.id === selectedMentionId);
+                if (mention) {
+                    setTimeout(() => {
+                        const scrollContainer = scrollContainerRef.current;
+                        if (!scrollContainer) return;
+
+                        const bbox = mention.mentionBbox;
+                        const scaledY = bbox.y * scale;
+                        const scaledX = bbox.x * scale;
+                        const scaledHeight = bbox.height * scale;
+
+                        const containerRect = scrollContainer.getBoundingClientRect();
+                        const pdfWrapper = scrollContainer.querySelector('.relative');
+                        if (!pdfWrapper) return;
+
+                        const pdfWrapperRect = pdfWrapper.getBoundingClientRect();
+                        const relativeY = pdfWrapperRect.top - containerRect.top + scrollContainer.scrollTop + scaledY;
+                        const relativeX = pdfWrapperRect.left - containerRect.left + scrollContainer.scrollLeft + scaledX;
+
+                        const targetScrollTop = relativeY - containerRect.height / 2 + scaledHeight / 2;
+                        const targetScrollLeft = relativeX - containerRect.width / 2;
+
+                        scrollContainer.scrollTo({
+                            top: Math.max(0, targetScrollTop),
+                            left: Math.max(0, targetScrollLeft),
+                            behavior: 'smooth',
+                        });
+                    }, 150);
+                }
+            }
+        }
+    }, [selectedMentionId, pageNumber, pageWidth, pageHeight, scale, document?.chunks]);
 
     if (documentLoading) {
         return (
@@ -146,7 +192,13 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
             </div>
 
             <div className="flex-1 flex overflow-hidden bg-gray-100">
-                <div className="flex-1 overflow-auto pdf-container" ref={containerRef}>
+                <div
+                    className="flex-1 overflow-auto pdf-container"
+                    ref={(el) => {
+                        containerRef.current = el;
+                        scrollContainerRef.current = el;
+                    }}
+                >
                     <div className="flex justify-center p-4">
                         <div className="relative">
                             <PDFDocument
