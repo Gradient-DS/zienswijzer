@@ -22,6 +22,7 @@ from .database import (
     get_document_by_id,
     create_document,
     add_document_to_case,
+    update_document,
     # Chunk functions
     get_chunks_by_document,
     get_chunk_by_id,
@@ -58,6 +59,7 @@ __all__ = [
     "get_document_by_id",
     "create_document",
     "add_document_to_case",
+    "update_document",
     # Chunk functions
     "get_chunks_by_document",
     "get_chunk_by_id",

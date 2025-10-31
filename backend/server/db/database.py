@@ -185,7 +185,7 @@ def get_cases() -> List[Dict[str, Any]]:
         # Add document IDs to each case
         for case in cases:
             doc_cursor = connection.execute("SELECT document_id FROM CaseDocuments WHERE case_id = ?", (case["id"],))
-            case["documentIds"] = [row["document_id"] for row in doc_cursor.fetchall()]
+            case["document_ids"] = [row["document_id"] for row in doc_cursor.fetchall()]
 
         return cases
 
@@ -205,7 +205,7 @@ def get_case_by_id(case_id: str) -> Optional[Dict[str, Any]]:
 
         # Add document IDs
         doc_cursor = connection.execute("SELECT document_id FROM CaseDocuments WHERE case_id = ?", (case_id,))
-        case["documentIds"] = [r["document_id"] for r in doc_cursor.fetchall()]
+        case["document_ids"] = [r["document_id"] for r in doc_cursor.fetchall()]
 
         return case
 
@@ -233,8 +233,8 @@ def get_documents() -> List[Dict[str, Any]]:
     with get_connection() as connection:
         cursor = connection.execute(
             """
-            SELECT id, title, description, type, file_path, file_size, page_count,
-                   processing_status, uploaded_at, processed_at, created_at, updated_at
+            SELECT id, title, description, type, keywords, author, file_path, file_size, page_count,
+                   parse_status, created_at, updated_at
             FROM Documents
             ORDER BY created_at DESC
         """
@@ -247,8 +247,8 @@ def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
     with get_connection() as connection:
         cursor = connection.execute(
             """
-            SELECT id, title, description, type, file_path, file_size, page_count,
-                   processing_status, uploaded_at, processed_at, created_at, updated_at
+            SELECT id, title, description, type, keywords, author, file_path, file_size, page_count,
+                   parse_status, created_at, updated_at
             FROM Documents
             WHERE id = ?
         """,
@@ -263,7 +263,7 @@ def create_document(document: Dict[str, Any]) -> None:
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO Documents (id, title, description, type, file_path, file_size, page_count, processing_status, uploaded_at, processed_at, created_at, updated_at)
+            INSERT INTO Documents (id, title, description, type, keywords, author, file_path, file_size, page_count, parse_status, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
@@ -271,14 +271,14 @@ def create_document(document: Dict[str, Any]) -> None:
                 document["title"],
                 document["description"],
                 document["type"],
+                document["keywords"],
+                document["author"],
                 document["file_path"],
                 document["file_size"],
                 document["page_count"],
-                document["processing_status"],
-                document["uploaded_at"],
-                document["processed_at"],
                 document["created_at"],
                 document["updated_at"],
+                document["parse_status"]
             ),
         )
         connection.commit()
@@ -296,7 +296,14 @@ def add_document_to_case(case_id: str, document_id: str) -> None:
         )
         connection.commit()
 
-
+def update_document(doc_id: str, document: Dict[str, Any]) -> None:
+    """Update a document."""
+    with get_connection() as connection:
+        connection.execute("""
+            UPDATE Documents SET title = ?, description = ?, type = ?, file_path = ?, file_size = ?, page_count = ?, parse_status = ?, created_at = ?, updated_at = ?
+            WHERE id = ?
+        """, (document["title"], document["description"], document["type"], document["file_path"], document["file_size"], document["page_count"], document["parse_status"], document["created_at"], document["updated_at"], doc_id))
+        connection.commit()
 # ---------------------
 # Chunk functions
 # ---------------------
@@ -396,6 +403,15 @@ def get_stakeholder_by_id(stakeholder_id: str) -> Optional[Dict[str, Any]]:
         )
         row = cursor.fetchone()
         return dict(row) if row else None
+
+def create_stakeholder(stakeholder: Dict[str, Any]) -> None:
+    """Create a new stakeholder."""
+    with get_connection() as connection:
+        connection.execute("""
+            INSERT INTO Stakeholders (id, type, name, contact_info, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (stakeholder["id"], stakeholder["type"], stakeholder["name"], stakeholder["contact_info"], stakeholder["created_at"], stakeholder["updated_at"]))
+        connection.commit()
 
 
 def create_stakeholder(stakeholder: Dict[str, Any]) -> None:

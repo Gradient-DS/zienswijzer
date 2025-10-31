@@ -1,18 +1,18 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-
-# from .utils.text_processor import transform_text
-from . import db
+#from .utils.text_processor import transform_text
 from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
 import shutil
 import uuid
+from server import db
+from server.utils.parsing import main as parse_pdf
 import random
-from .utils.text_processor import transform_text
-from .utils.chunk_generator import (
+from server.utils.text_processor import transform_text
+from server.utils.chunk_generator import (
     generate_fake_chunks,
     generate_fake_stakeholders,
     generate_fake_chunk_stakeholders,
@@ -82,10 +82,10 @@ class Workspace(BaseModel):
     id: str
     name: str
     description: str
-    createdAt: str
-    updatedAt: str
-    memberCount: int
-    isOwner: bool
+    created_at: str
+    updated_at: str
+    member_count: int
+    is_owner: bool
 
 
 class BoundingBox(BaseModel):
@@ -100,26 +100,22 @@ class Document(BaseModel):
     title: str
     description: Optional[str] = None
     type: Optional[str] = None
-    filePath: Optional[str] = None
-    fileSize: Optional[int] = None
-    pageCount: Optional[int] = None
-    processingStatus: Optional[str] = None
-    uploadedAt: Optional[str] = None
-    processedAt: Optional[str] = None
-    createdAt: str
-    updatedAt: str
-    content: Optional[str] = None
-    authorId: Optional[str] = None
+    keywords: Optional[str] = None
+    author: Optional[str] = None
+    file_path: Optional[str] = None
+    file_size: Optional[int] = None
+    page_count: Optional[int] = None
+    parse_status: Optional[str] = None
 
 
 class WorkspaceDetail(BaseModel):
     id: str
     name: str
     description: str
-    createdAt: str
-    updatedAt: str
-    memberCount: int
-    isOwner: bool
+    created_at: str
+    updated_at: str
+    member_count: int
+    is_owner: bool
     members: List[User]
     documents: List[Document]
 
@@ -145,24 +141,25 @@ class Case(BaseModel):
     id: str
     title: str
     description: str
-    documentIds: List[str]
-    createdAt: str
-    updatedAt: str
+    document_ids: List[str]
+    created_at: str
+    updated_at: str
 
 
 class CaseDetail(BaseModel):
     id: str
     title: str
     description: str
-    documentIds: List[str]
-    createdAt: str
-    updatedAt: str
+    document_ids: List[str]
+    created_at: str
+    updated_at: str
     documents: List[Document]
 
 
 class CreateCaseRequest(BaseModel):
     title: str
     description: str
+    password: Optional[str] = None
 
 
 class CreateCaseResponse(BaseModel):
@@ -181,26 +178,26 @@ class Stakeholder(BaseModel):
     id: str
     type: str
     name: str
-    contactInfo: str
-    createdAt: str
-    updatedAt: str
+    contact_info: str
+    created_at: str
+    updated_at: str
 
 
 class StakeholderMention(BaseModel):
     id: str
-    chunkId: str
-    stakeholderId: str
+    chunk_id: str
+    stakeholder_id: str
     stakeholder: Stakeholder
     confidence: float
     mentionText: str
     mentionBbox: BoundingBox
     verified: bool
-    createdAt: str
+    created_at: str
 
 
 class Chunk(BaseModel):
     id: str
-    documentId: str
+    document_id: str
     page: int
     context: str
     bbox: BoundingBox
@@ -208,7 +205,7 @@ class Chunk(BaseModel):
 
 class ChunkDetail(BaseModel):
     id: str
-    documentId: str
+    document_id: str
     page: int
     context: str
     bbox: BoundingBox
@@ -224,14 +221,14 @@ class DocumentDetail(BaseModel):
     title: str
     description: Optional[str] = None
     type: Optional[str] = None
-    filePath: Optional[str] = None
+    file_path: Optional[str] = None
     fileSize: Optional[int] = None
     pageCount: Optional[int] = None
     processingStatus: Optional[str] = None
-    uploadedAt: Optional[str] = None
-    processedAt: Optional[str] = None
-    createdAt: str
-    updatedAt: str
+    uploaded_at: Optional[str] = None
+    processed_at: Optional[str] = None
+    created_at: str
+    updated_at: str
     chunks: List[ChunkDetail]
     pdfUrl: Optional[str] = None
 
@@ -260,7 +257,7 @@ def login(request: LoginRequest):
     logger.info(f"User: {user}")
     if not user:
         user = db.get_user_by_email(request.email)
-
+    
     if not user:
         # Create a dummy user for any login attempt
         user = {
@@ -298,17 +295,15 @@ def get_workspaces():
     workspaces = []
     logger.info(f"Workspaces: {workspaces_data}")
     for ws in workspaces_data:
-        workspaces.append(
-            Workspace(
-                id=ws["id"],
-                name=ws["name"],
-                description=ws.get("description", ""),
-                createdAt=ws["created_at"],
-                updatedAt=ws["updated_at"],
-                memberCount=ws["member_count"],
-                isOwner=bool(ws.get("is_owner", 0)),
-            )
-        )
+        workspaces.append(Workspace(
+            id=ws["id"],
+            name=ws["name"],
+            description=ws.get("description", ""),
+            created_at=ws["created_at"],
+            updated_at=ws["updated_at"],
+            member_count=ws["member_count"],
+            is_owner=bool(ws.get("is_owner", 0))
+        ))
     return WorkspaceListResponse(workspaces=workspaces)
 
 
@@ -320,10 +315,10 @@ def create_workspace(request: CreateWorkspaceRequest):
         "id": f"workspace_{len(db.get_workspaces()) + 1}",
         "name": request.name,
         "description": request.description or "New workspace",
-        "createdAt": datetime.now().isoformat() + "Z",
-        "updatedAt": datetime.now().isoformat() + "Z",
-        "memberCount": 1,
-        "isOwner": True,
+        "created_at": datetime.now().isoformat() + "Z",
+        "updated_at": datetime.now().isoformat() + "Z",
+        "member_count": 1,
+        "is_owner": True,
     }
 
     return CreateWorkspaceResponse(workspace=Workspace(**new_workspace))
@@ -340,39 +335,34 @@ def get_workspace_detail(workspace_id: str):
     # Get workspace members
     members_data = db.get_workspace_members(workspace_id)
     members = [User(**member) for member in members_data]
-
+    
     # Get all documents (for now, return all documents - in a real app, filter by workspace)
     documents_data = db.get_documents()
     documents = []
     for doc in documents_data:
-        documents.append(
-            Document(
-                id=doc["id"],
-                title=doc["title"],
-                description=doc.get("description"),
-                type=doc.get("type"),
-                filePath=doc.get("file_path"),
-                fileSize=doc.get("file_size"),
-                pageCount=doc.get("page_count"),
-                processingStatus=doc.get("processing_status"),
-                uploadedAt=doc.get("uploaded_at"),
-                processedAt=doc.get("processed_at"),
-                createdAt=doc["created_at"],
-                updatedAt=doc["updated_at"],
-            )
-        )
+        documents.append(Document(
+            id=doc["id"],
+            title=doc["title"],
+            description=doc.get("description"),
+            type=doc.get("type"),
+            file_path=doc.get("file_path"),
+            fileSize=doc.get("file_size"),
+            pageCount=doc.get("page_count"),
+            created_at=doc["created_at"],
+            updated_at=doc["updated_at"]
+        ))
 
     # Create detailed workspace
     detailed_workspace = WorkspaceDetail(
         id=workspace["id"],
         name=workspace["name"],
         description=workspace.get("description", ""),
-        createdAt=workspace["created_at"],
-        updatedAt=workspace["updated_at"],
-        memberCount=workspace["member_count"],
-        isOwner=bool(workspace.get("is_owner", 0)),
+        created_at=workspace["created_at"],
+        updated_at=workspace["updated_at"],
+        member_count=workspace["member_count"],
+        is_owner=bool(workspace.get("is_owner", 0)),
         members=members,
-        documents=documents,
+        documents=documents
     )
 
     return WorkspaceDetailResponse(workspace=detailed_workspace)
@@ -386,16 +376,14 @@ def get_cases():
     cases = []
     logger.info(f"Cases: {cases_data}")
     for case in cases_data:
-        cases.append(
-            Case(
-                id=case["id"],
-                title=case["title"],
-                description=case.get("description", ""),
-                documentIds=case["documentIds"],
-                createdAt=case["created_at"],
-                updatedAt=case["updated_at"],
-            )
-        )
+        cases.append(Case(
+            id=case["id"],
+            title=case["title"],
+            description=case.get("description", ""),
+            document_ids=case["document_ids"],
+            created_at=case["created_at"],
+            updated_at=case["updated_at"]
+        ))
     return CaseListResponse(cases=cases)
 
 
@@ -409,34 +397,29 @@ def get_case_detail(case_id: str):
 
     # Get documents for this case
     case_documents = []
-    for doc_id in case["documentIds"]:
+    for doc_id in case["document_ids"]:
         doc = db.get_document_by_id(doc_id)
         if doc:
-            case_documents.append(
-                Document(
-                    id=doc["id"],
-                    title=doc["title"],
-                    description=doc.get("description"),
-                    type=doc.get("type"),
-                    filePath=doc.get("file_path"),
-                    fileSize=doc.get("file_size"),
-                    pageCount=doc.get("page_count"),
-                    processingStatus=doc.get("processing_status"),
-                    uploadedAt=doc.get("uploaded_at"),
-                    processedAt=doc.get("processed_at"),
-                    createdAt=doc["created_at"],
-                    updatedAt=doc["updated_at"],
-                )
-            )
+            case_documents.append(Document(
+                id=doc["id"],
+                title=doc["title"],
+                description=doc.get("description"),
+                type=doc.get("type"),
+                file_path=doc.get("file_path"),
+                fileSize=doc.get("file_size"),
+                pageCount=doc.get("page_count"),
+                created_at=doc["created_at"],
+                updated_at=doc["updated_at"]
+            ))
 
     detailed_case = CaseDetail(
         id=case["id"],
         title=case["title"],
         description=case.get("description", ""),
-        documentIds=case["documentIds"],
-        createdAt=case["created_at"],
-        updatedAt=case["updated_at"],
-        documents=case_documents,
+        document_ids=case["document_ids"],
+        created_at=case["created_at"],
+        updated_at=case["updated_at"],
+        documents=case_documents
     )
 
     return CaseDetailResponse(case=detailed_case)
@@ -446,29 +429,19 @@ def get_case_detail(case_id: str):
 def create_case(request: CreateCaseRequest):
     """Create a new case"""
     logger.info(f"Create case request: {request}")
-    now = datetime.now().isoformat() + "Z"
-
     new_case = {
         "id": f"case_{len(db.get_cases()) + 1}",
         "title": request.title,
         "description": request.description,
+        "document_ids": [],
+        "created_at": datetime.now().isoformat() + "Z",
+        "updated_at": datetime.now().isoformat() + "Z",
         "password": None,
-        "created_at": now,
-        "updated_at": now,
     }
 
     db.create_case(new_case)
 
-    return_case = {
-        "id": new_case["id"],
-        "title": new_case["title"],
-        "description": new_case["description"],
-        "documentIds": [],
-        "createdAt": new_case["created_at"],
-        "updatedAt": new_case["updated_at"],
-    }
-
-    return CreateCaseResponse(case=Case(**return_case))
+    return CreateCaseResponse(case=Case(**new_case))
 
 
 # Documents routes
@@ -479,22 +452,17 @@ def get_documents():
     documents = []
     logger.info(f"Documents: {documents_data}")
     for doc in documents_data:
-        documents.append(
-            Document(
-                id=doc["id"],
-                title=doc["title"],
-                description=doc.get("description"),
-                type=doc.get("type"),
-                filePath=doc.get("file_path"),
-                fileSize=doc.get("file_size"),
-                pageCount=doc.get("page_count"),
-                processingStatus=doc.get("processing_status"),
-                uploadedAt=doc.get("uploaded_at"),
-                processedAt=doc.get("processed_at"),
-                createdAt=doc["created_at"],
-                updatedAt=doc["updated_at"],
-            )
-        )
+        documents.append(Document(
+            id=doc["id"],
+            title=doc["title"],
+            description=doc.get("description"),
+            type=doc.get("type"),
+            file_path=doc.get("file_path"),
+            fileSize=doc.get("file_size"),
+            pageCount=doc.get("page_count"),
+            created_at=doc["created_at"],
+            updated_at=doc["updated_at"]
+        ))
     return {"documents": documents}
 
 
@@ -521,28 +489,28 @@ def get_document_detail(document_id: str):
                 stakeholder_mentions.append(
                     StakeholderMention(
                         id=cs["id"],
-                        chunkId=cs["chunk_id"],
-                        stakeholderId=cs["stakeholder_id"],
+                        chunk_id=cs["chunk_id"],
+                        stakeholder_id=cs["stakeholder_id"],
                         stakeholder=Stakeholder(
                             id=stakeholder["id"],
                             type=stakeholder.get("type", ""),
                             name=stakeholder["name"],
-                            contactInfo=stakeholder.get("contact_info", ""),
-                            createdAt=stakeholder["created_at"],
-                            updatedAt=stakeholder["updated_at"],
+                            contact_info=stakeholder.get("contact_info", ""),
+                            created_at=stakeholder["created_at"],
+                            updated_at=stakeholder["updated_at"]
                         ),
                         confidence=cs["confidence"],
                         mentionText=cs["mention_text"],
                         mentionBbox=BoundingBox(**cs["mention_bbox"]),
                         verified=bool(cs["verified"]),
-                        createdAt=cs["created_at"],
+                        created_at=cs["created_at"],
                     )
                 )
 
         chunks_with_mentions.append(
             ChunkDetail(
                 id=chunk["id"],
-                documentId=chunk["document_id"],
+                document_id=chunk["document_id"],
                 page=chunk["page"],
                 context=chunk["context"],
                 bbox=BoundingBox(**chunk["bbox"]),
@@ -558,14 +526,11 @@ def get_document_detail(document_id: str):
         title=document["title"],
         description=document.get("description"),
         type=document.get("type"),
-        filePath=document.get("file_path"),
+        file_path=document.get("file_path"),
         fileSize=document.get("file_size"),
         pageCount=document.get("page_count"),
-        processingStatus=document.get("processing_status"),
-        uploadedAt=document.get("uploaded_at"),
-        processedAt=document.get("processed_at"),
-        createdAt=document["created_at"],
-        updatedAt=document["updated_at"],
+        created_at=document["created_at"],
+        updated_at=document["updated_at"],
         chunks=chunks_with_mentions,
         pdfUrl=pdf_url,
     )
@@ -613,28 +578,28 @@ def get_document_chunks(document_id: str):
                 stakeholder_mentions.append(
                     StakeholderMention(
                         id=cs["id"],
-                        chunkId=cs["chunk_id"],
-                        stakeholderId=cs["stakeholder_id"],
+                        chunk_id=cs["chunk_id"],
+                        stakeholder_id=cs["stakeholder_id"],
                         stakeholder=Stakeholder(
                             id=stakeholder["id"],
                             type=stakeholder.get("type", ""),
                             name=stakeholder["name"],
-                            contactInfo=stakeholder.get("contact_info", ""),
-                            createdAt=stakeholder["created_at"],
-                            updatedAt=stakeholder["updated_at"],
+                            contact_info=stakeholder.get("contact_info", ""),
+                            created_at=stakeholder["created_at"],
+                            updated_at=stakeholder["updated_at"]
                         ),
                         confidence=cs["confidence"],
                         mentionText=cs["mention_text"],
                         mentionBbox=BoundingBox(**cs["mention_bbox"]),
                         verified=bool(cs["verified"]),
-                        createdAt=cs["created_at"],
+                        created_at=cs["created_at"],
                     )
                 )
 
         chunks_with_mentions.append(
             ChunkDetail(
                 id=chunk["id"],
-                documentId=chunk["document_id"],
+                document_id=chunk["document_id"],
                 page=chunk["page"],
                 context=chunk["context"],
                 bbox=BoundingBox(**chunk["bbox"]),
@@ -650,10 +615,9 @@ class UploadDocumentResponse(BaseModel):
 
 
 @app.post("/documents/upload", response_model=UploadDocumentResponse)
-async def upload_document(case_id: str = Query(...), file: UploadFile = File(...)):
+async def upload_document(case_id: str, file: UploadFile = File(...)):
     """Upload a PDF document to a case"""
-    logger.info(f"Upload document request: case_id={case_id}, filename={file.filename}")
-
+    logger.info(f"Upload document request: {case_id}, {file.filename}")
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
@@ -665,25 +629,17 @@ async def upload_document(case_id: str = Query(...), file: UploadFile = File(...
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
-    # Create data/pdfs directory if it doesn't exist
-    data_dir = Path(__file__).parent / "data" / "pdfs"
-    data_dir.mkdir(parents=True, exist_ok=True)
+    # Create data directory if it doesn't exist
+    data_dir = Path(__file__).parent / "data"
+    data_dir.mkdir(exist_ok=True)
 
     # Generate unique document ID
     doc_id = f"doc_{uuid.uuid4().hex[:8]}"
 
-    # Generate unique filename to avoid collisions
-    unique_filename = f"{doc_id}_{file.filename}"
-    file_path = data_dir / unique_filename
-
     # Save file
-    try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        logger.info(f"File saved to: {file_path}")
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+    file_path = data_dir / f"{doc_id}_{file.filename}"
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
     # Get file size
     file_size = file_path.stat().st_size
@@ -696,21 +652,22 @@ async def upload_document(case_id: str = Query(...), file: UploadFile = File(...
     new_document = {
         "id": doc_id,
         "title": file.filename,
-        "description": f"Uploaded document: {file.filename}",
-        "type": "document",
+        "description": "",
+        "type": "pdf",
+        "keywords": None,
+        "author": None,
         "file_path": str(file_path.relative_to(Path(__file__).parent)),
         "file_size": file_size,
-        "page_count": page_count,
-        "processing_status": "completed",
-        "uploaded_at": now,
-        "processed_at": now,
+        "page_count": 0,  # Would need PDF parsing to get actual page count
+        "parse_status": "pending",
         "created_at": now,
         "updated_at": now,
     }
 
     db.create_document(new_document)
     db.add_document_to_case(case_id, doc_id)
-
+    parse_pdf(doc_id)
+    
     # Generate fake chunks and stakeholders
     try:
         chunks = generate_fake_chunks(doc_id, page_count)
@@ -748,18 +705,15 @@ async def upload_document(case_id: str = Query(...), file: UploadFile = File(...
         title=new_document["title"],
         description=new_document["description"],
         type=new_document["type"],
-        filePath=new_document["file_path"],
+        file_path=new_document["file_path"],
         fileSize=new_document["file_size"],
         pageCount=new_document["page_count"],
-        processingStatus=new_document["processing_status"],
-        uploadedAt=new_document["uploaded_at"],
-        processedAt=new_document["processed_at"],
-        createdAt=new_document["created_at"],
-        updatedAt=new_document["updated_at"],
+        processingStatus=new_document["parse_status"],
+        created_at=new_document["created_at"],
+        updated_at=new_document["updated_at"],
     )
 
     return UploadDocumentResponse(document=return_document)
-
 
 if __name__ == "__main__":
     import uvicorn
