@@ -26,6 +26,25 @@ def init_db() -> None:
     with get_connection() as connection:
         with open(SCHEMA_PATH, "r", encoding="utf-8") as schema_file:
             connection.executescript(schema_file.read())
+        # Run migrations for existing databases
+        _migrate_database(connection)
+
+
+def _migrate_database(connection: sqlite3.Connection) -> None:
+    """Apply database migrations for existing databases."""
+    cursor = connection.cursor()
+    
+    # Check if publication_status column exists in Stakeholders table
+    cursor.execute("PRAGMA table_info(Stakeholders)")
+    columns = [row[1] for row in cursor.fetchall()]
+    
+    if "publication_status" not in columns:
+        # Add publication_status column (no default, NULL allowed)
+        cursor.execute("""
+            ALTER TABLE Stakeholders 
+            ADD COLUMN publication_status TEXT
+        """)
+        connection.commit()
 
 
 # ---------------------
@@ -385,7 +404,7 @@ def get_stakeholders() -> List[Dict[str, Any]]:
     with get_connection() as connection:
         cursor = connection.execute(
             """
-            SELECT id, type, name, contact_info, created_at, updated_at
+            SELECT id, type, name, contact_info, publication_status, created_at, updated_at
             FROM Stakeholders
             ORDER BY name ASC
         """
@@ -398,7 +417,7 @@ def get_stakeholder_by_id(stakeholder_id: str) -> Optional[Dict[str, Any]]:
     with get_connection() as connection:
         cursor = connection.execute(
             """
-            SELECT id, type, name, contact_info, created_at, updated_at
+            SELECT id, type, name, contact_info, publication_status, created_at, updated_at
             FROM Stakeholders
             WHERE id = ?
         """,
@@ -407,24 +426,13 @@ def get_stakeholder_by_id(stakeholder_id: str) -> Optional[Dict[str, Any]]:
         row = cursor.fetchone()
         return dict(row) if row else None
 
-
 def create_stakeholder(stakeholder: Dict[str, Any]) -> None:
     """Create a new stakeholder."""
     with get_connection() as connection:
-        connection.execute(
-            """
+        connection.execute("""
             INSERT INTO Stakeholders (id, type, name, contact_info, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
-        """,
-            (
-                stakeholder["id"],
-                stakeholder["type"],
-                stakeholder["name"],
-                stakeholder["contact_info"],
-                stakeholder["created_at"],
-                stakeholder["updated_at"],
-            ),
-        )
+        """, (stakeholder["id"], stakeholder["type"], stakeholder["name"], stakeholder["contact_info"], stakeholder["created_at"], stakeholder["updated_at"]))
         connection.commit()
 
 
@@ -433,18 +441,44 @@ def create_stakeholder(stakeholder: Dict[str, Any]) -> None:
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO Stakeholders (id, type, name, contact_info, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO Stakeholders (id, type, name, contact_info, publication_status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 stakeholder["id"],
                 stakeholder.get("type"),
                 stakeholder["name"],
                 stakeholder.get("contact_info"),
+                stakeholder.get("publication_status"),
                 stakeholder["created_at"],
                 stakeholder["updated_at"],
             ),
         )
+        connection.commit()
+
+
+def update_stakeholder(stakeholder_id: str, updates: Dict[str, Any]) -> None:
+    """Update a stakeholder's fields."""
+    allowed_fields = ["type", "name", "contact_info", "publication_status"]
+    update_fields = []
+    values = []
+    
+    for field in allowed_fields:
+        if field in updates:
+            update_fields.append(f"{field} = ?")
+            values.append(updates[field])
+    
+    if not update_fields:
+        return  # No fields to update
+    
+    # Always update updated_at
+    update_fields.append("updated_at = ?")
+    values.append(datetime.now().isoformat())
+    values.append(stakeholder_id)
+    
+    with get_connection() as connection:
+        query = f"UPDATE Stakeholders SET {', '.join(update_fields)} WHERE id = ?"
+        connection.execute(query, values)
         connection.commit()
 
 
@@ -460,7 +494,7 @@ def get_chunk_stakeholders(chunk_id: str) -> List[Dict[str, Any]]:
             """
             SELECT cs.id, cs.chunk_id, cs.stakeholder_id, cs.confidence, cs.mention_text,
                    cs.mention_bbox, cs.verified, cs.created_at,
-                   s.type, s.name, s.contact_info
+                   s.type, s.name, s.contact_info, s.publication_status
             FROM ChunkStakeholders cs
             JOIN Stakeholders s ON cs.stakeholder_id = s.id
             WHERE cs.chunk_id = ?
@@ -486,7 +520,8 @@ def get_stakeholder_mentions_by_document(document_id: str) -> List[Dict[str, Any
             """
             SELECT cs.id, cs.chunk_id, cs.stakeholder_id, cs.confidence, cs.mention_text,
                    cs.mention_bbox, cs.verified, cs.created_at,
-                   s.type, s.name, s.contact_info, s.created_at as stakeholder_created_at,
+                   s.type, s.name, s.contact_info, s.publication_status,
+                   s.created_at as stakeholder_created_at,
                    s.updated_at as stakeholder_updated_at
             FROM ChunkStakeholders cs
             JOIN Stakeholders s ON cs.stakeholder_id = s.id

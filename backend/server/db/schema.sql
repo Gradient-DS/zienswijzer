@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS Stakeholders (
     type TEXT,
     name TEXT NOT NULL,
     contact_info TEXT,
+    publication_status TEXT, -- 'agree', 'disagree', 'pending', or NULL
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );

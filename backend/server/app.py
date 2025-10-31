@@ -182,6 +182,7 @@ class Stakeholder(BaseModel):
     type: Optional[str] = None
     name: str
     contact_info: Optional[str] = None
+    publication_status: Optional[str] = None  # 'agree', 'disagree', 'pending', or None
     created_at: str
     updated_at: str
 
@@ -538,6 +539,7 @@ def get_document_detail(document_id: str):
                             type=stakeholder.get("type"),
                             name=stakeholder["name"],
                             contact_info=stakeholder.get("contact_info"),
+                            publication_status=stakeholder.get("publication_status"),
                             created_at=stakeholder["created_at"],
                             updated_at=stakeholder["updated_at"],
                         ),
@@ -630,6 +632,7 @@ def get_document_chunks(document_id: str):
                             type=stakeholder.get("type"),
                             name=stakeholder["name"],
                             contact_info=stakeholder.get("contact_info"),
+                            publication_status=stakeholder.get("publication_status"),
                             created_at=stakeholder["created_at"],
                             updated_at=stakeholder["updated_at"],
                         ),
@@ -790,6 +793,146 @@ async def upload_document(
     return UploadDocumentResponse(document=return_document)
 
 
+# Stakeholder routes
+class CreateStakeholderRequest(BaseModel):
+    type: Optional[str] = None
+    name: str
+    contact_info: Optional[str] = None
+    publication_status: Optional[str] = None  # 'agree', 'disagree', 'pending', or None
+
+
+class UpdateStakeholderPublicationStatusRequest(BaseModel):
+    publication_status: Optional[str] = None  # 'agree', 'disagree', 'pending', or None
+
+
+class StakeholderResponse(BaseModel):
+    stakeholder: Stakeholder
+
+
+class StakeholderListResponse(BaseModel):
+    stakeholders: List[Stakeholder]
+
+
+class CreateStakeholderResponse(BaseModel):
+    stakeholder: Stakeholder
+
+
+@app.post("/stakeholders", response_model=CreateStakeholderResponse)
+def create_stakeholder(request: CreateStakeholderRequest):
+    """Create a new stakeholder"""
+    # Validate publication_status if provided
+    if request.publication_status:
+        valid_statuses = ["agree", "disagree", "pending"]
+        if request.publication_status not in valid_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid publication_status. Must be one of: {', '.join(valid_statuses)}"
+            )
+    
+    # Generate ID and timestamps
+    stakeholder_id = f"stakeholder_{uuid.uuid4().hex[:8]}"
+    now = datetime.now().isoformat() + "Z"
+    
+    # Create stakeholder data
+    new_stakeholder = {
+        "id": stakeholder_id,
+        "type": request.type,
+        "name": request.name,
+        "contact_info": request.contact_info,
+        "publication_status": request.publication_status,
+        "created_at": now,
+        "updated_at": now,
+    }
+    
+    # Save to database
+    db.create_stakeholder(new_stakeholder)
+    
+    # Return created stakeholder
+    return CreateStakeholderResponse(stakeholder=Stakeholder(
+        id=new_stakeholder["id"],
+        type=new_stakeholder.get("type"),
+        name=new_stakeholder["name"],
+        contact_info=new_stakeholder.get("contact_info"),
+        publication_status=new_stakeholder.get("publication_status"),
+        created_at=new_stakeholder["created_at"],
+        updated_at=new_stakeholder["updated_at"]
+    ))
+
+
+@app.get("/stakeholders", response_model=StakeholderListResponse)
+def get_stakeholders():
+    """Get all stakeholders"""
+    stakeholders_data = db.get_stakeholders()
+    stakeholders = []
+    for stakeholder in stakeholders_data:
+        stakeholders.append(Stakeholder(
+            id=stakeholder["id"],
+            type=stakeholder.get("type"),
+            name=stakeholder["name"],
+            contact_info=stakeholder.get("contact_info"),
+            publication_status=stakeholder.get("publication_status"),
+            created_at=stakeholder["created_at"],
+            updated_at=stakeholder["updated_at"]
+        ))
+    return StakeholderListResponse(stakeholders=stakeholders)
+
+
+@app.get("/stakeholders/{stakeholder_id}", response_model=StakeholderResponse)
+def get_stakeholder(stakeholder_id: str):
+    """Get a stakeholder by ID"""
+    stakeholder = db.get_stakeholder_by_id(stakeholder_id)
+    if not stakeholder:
+        raise HTTPException(status_code=404, detail="Stakeholder not found")
+    
+    return StakeholderResponse(stakeholder=Stakeholder(
+        id=stakeholder["id"],
+        type=stakeholder.get("type"),
+        name=stakeholder["name"],
+        contact_info=stakeholder.get("contact_info"),
+        publication_status=stakeholder.get("publication_status", "pending"),
+        created_at=stakeholder["created_at"],
+        updated_at=stakeholder["updated_at"]
+    ))
+
+
+@app.patch("/stakeholders/{stakeholder_id}/publication-status", response_model=StakeholderResponse)
+def update_stakeholder_publication_status(
+    stakeholder_id: str,
+    request: UpdateStakeholderPublicationStatusRequest
+):
+    """Update a stakeholder's publication status"""
+    # Validate publication_status value if provided
+    if request.publication_status is not None:
+        valid_statuses = ["agree", "disagree", "pending"]
+        if request.publication_status not in valid_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid publication_status. Must be one of: {', '.join(valid_statuses)}, or null"
+            )
+    
+    # Check if stakeholder exists
+    stakeholder = db.get_stakeholder_by_id(stakeholder_id)
+    if not stakeholder:
+        raise HTTPException(status_code=404, detail="Stakeholder not found")
+    
+    # Update the stakeholder
+    db.update_stakeholder(stakeholder_id, {
+        "publication_status": request.publication_status
+    })
+    
+    # Return updated stakeholder
+    updated_stakeholder = db.get_stakeholder_by_id(stakeholder_id)
+    return StakeholderResponse(stakeholder=Stakeholder(
+        id=updated_stakeholder["id"],
+        type=updated_stakeholder.get("type"),
+        name=updated_stakeholder["name"],
+        contact_info=updated_stakeholder.get("contact_info"),
+        publication_status=updated_stakeholder.get("publication_status"),
+        created_at=updated_stakeholder["created_at"],
+        updated_at=updated_stakeholder["updated_at"]
+    ))
+
+
 # =============================================================================
 # EMAIL INTEGRATION
 # =============================================================================
@@ -819,8 +962,28 @@ async def upload_document(
 
 
 from server.email import email_router
+from server.reply_classification import classification_router
 
 app.include_router(email_router)
+
+# =============================================================================
+# REPLY CLASSIFICATION
+# =============================================================================
+# Sentiment classification for stakeholder responses using zero-shot NLP
+# Determines whether responses agree to or object to publication
+#
+# Available endpoints:
+#   - POST /classification/classify  - Classify text sentiment
+#   - GET  /classification/health    - Check service status
+#
+# Model:
+#   - cross-encoder/nli-deberta-v3-small (zero-shot classification)
+#   - Candidate labels: "agrees to publish", "objects to publication"
+#
+# See backend/server/reply_classification/README.md for detailed documentation
+# =============================================================================
+
+app.include_router(classification_router)
 
 
 # VERIFICATION INTEGRATION
