@@ -467,27 +467,49 @@ def create_stakeholder(stakeholder: Dict[str, Any]) -> None:
 # ---------------------
 
 
-def get_chunk_stakeholders(chunk_id: str) -> List[Dict[str, Any]]:
-    """Get all stakeholder mentions for a chunk."""
+def get_chunk_stakeholders(chunk_id: str, case_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Get all stakeholder mentions for a chunk, optionally with per-case verification status."""
     with get_connection() as connection:
-        cursor = connection.execute(
-            """
-            SELECT cs.id, cs.chunk_id, cs.stakeholder_id, cs.confidence, cs.mention_text,
-                   cs.mention_bbox, cs.verified, cs.created_at,
-                   s.type, s.name, s.contact_info
-            FROM ChunkStakeholders cs
-            JOIN Stakeholders s ON cs.stakeholder_id = s.id
-            WHERE cs.chunk_id = ?
-            ORDER BY cs.confidence DESC
-        """,
-            (chunk_id,),
-        )
+        if case_id:
+            cursor = connection.execute(
+                """
+                SELECT cs.id, cs.chunk_id, cs.stakeholder_id, cs.confidence, cs.mention_text,
+                       cs.mention_bbox, ccsv.verified as verified, cs.created_at,
+                       s.type, s.name, s.contact_info
+                FROM ChunkStakeholders cs
+                JOIN Stakeholders s ON cs.stakeholder_id = s.id
+                LEFT JOIN CaseChunkStakeholderVerification ccsv 
+                    ON ccsv.chunk_stakeholder_id = cs.id AND ccsv.case_id = ?
+                WHERE cs.chunk_id = ?
+                ORDER BY cs.confidence DESC
+            """,
+                (case_id, chunk_id),
+            )
+        else:
+            cursor = connection.execute(
+                """
+                SELECT cs.id, cs.chunk_id, cs.stakeholder_id, cs.confidence, cs.mention_text,
+                       cs.mention_bbox, cs.verified, cs.created_at,
+                       s.type, s.name, s.contact_info
+                FROM ChunkStakeholders cs
+                JOIN Stakeholders s ON cs.stakeholder_id = s.id
+                WHERE cs.chunk_id = ?
+                ORDER BY cs.confidence DESC
+            """,
+                (chunk_id,),
+            )
 
         mentions = []
         for row in cursor.fetchall():
             mention = dict(row)
             mention["mention_bbox"] = json.loads(mention["mention_bbox"])
-            mention["verified"] = bool(mention["verified"])
+            if case_id:
+                if mention["verified"] is not None:
+                    mention["verified"] = bool(mention["verified"])
+                else:
+                    mention["verified"] = None
+            else:
+                mention["verified"] = bool(mention["verified"])
             mentions.append(mention)
 
         return mentions
@@ -912,7 +934,7 @@ def get_chunk_stakeholders_by_id(mention_id: str) -> Optional[Dict[str, Any]]:
 
 
 def update_chunk_stakeholder_verified(mention_id: str, verified: bool) -> None:
-    """Update the verification status of a chunk stakeholder mention."""
+    """Update the verification status of a chunk stakeholder mention (deprecated - use per-case verification)."""
     with get_connection() as connection:
         connection.execute(
             """
@@ -921,5 +943,38 @@ def update_chunk_stakeholder_verified(mention_id: str, verified: bool) -> None:
             WHERE id = ?
         """,
             (1 if verified else 0, mention_id),
+        )
+        connection.commit()
+
+
+def get_case_mention_verification(case_id: str, mention_id: str) -> Optional[bool]:
+    """Get verification status for a mention in a specific case."""
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            SELECT verified FROM CaseChunkStakeholderVerification
+            WHERE case_id = ? AND chunk_stakeholder_id = ?
+        """,
+            (case_id, mention_id),
+        )
+        row = cursor.fetchone()
+        if row:
+            return bool(row["verified"])
+        return None
+
+
+def set_case_mention_verification(case_id: str, mention_id: str, verified: bool) -> None:
+    """Set verification status for a mention in a specific case."""
+    now = datetime.now().isoformat()
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO CaseChunkStakeholderVerification (case_id, chunk_stakeholder_id, verified, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(case_id, chunk_stakeholder_id) DO UPDATE SET
+                verified = ?,
+                updated_at = ?
+        """,
+            (case_id, mention_id, 1 if verified else 0, now, now, 1 if verified else 0, now),
         )
         connection.commit()

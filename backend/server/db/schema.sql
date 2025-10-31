@@ -191,6 +191,20 @@ CREATE TABLE IF NOT EXISTS EmailReplies (
 );
 
 -- ====================
+-- Table: CaseChunkStakeholderVerification
+-- ====================
+CREATE TABLE IF NOT EXISTS CaseChunkStakeholderVerification (
+    case_id TEXT NOT NULL,
+    chunk_stakeholder_id TEXT NOT NULL,
+    verified INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (case_id, chunk_stakeholder_id),
+    FOREIGN KEY (case_id) REFERENCES Cases(id),
+    FOREIGN KEY (chunk_stakeholder_id) REFERENCES ChunkStakeholders(id)
+);
+
+-- ====================
 -- Indexes for performance
 -- ====================
 CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON WorkspaceMembers(user_id);
@@ -200,6 +214,8 @@ CREATE INDEX IF NOT EXISTS idx_case_documents_document ON CaseDocuments(document
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON Chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_chunk_stakeholders_chunk ON ChunkStakeholders(chunk_id);
 CREATE INDEX IF NOT EXISTS idx_chunk_stakeholders_stakeholder ON ChunkStakeholders(stakeholder_id);
+CREATE INDEX IF NOT EXISTS idx_case_verification_case ON CaseChunkStakeholderVerification(case_id);
+CREATE INDEX IF NOT EXISTS idx_case_verification_mention ON CaseChunkStakeholderVerification(chunk_stakeholder_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_tokens_expires_at ON OAuthTokens(expires_at);
 CREATE INDEX IF NOT EXISTS idx_sent_emails_user ON SentEmails(user_id);
 CREATE INDEX IF NOT EXISTS idx_sent_emails_case ON SentEmails(case_id);

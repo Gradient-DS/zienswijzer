@@ -77,10 +77,23 @@ export function Sidebar({
                 navigate(`${location.pathname}?${newSearchParams.toString()}`, { replace: true });
             };
 
+            const handleOverviewClick = () => {
+                const newSearchParams = new URLSearchParams(location.search);
+                newSearchParams.delete('stakeholder');
+                newSearchParams.set('step', 'belanghebbenden');
+                navigate(`${location.pathname}?${newSearchParams.toString()}`, { replace: true });
+            };
+
             return (
                 <div className="flex-1 flex flex-col min-h-0">
                     <div className="flex-shrink-0 p-4 pb-3 border-b border-gray-200 bg-gray-50">
-                        <h2 className="text-lg font-semibold">Belanghebbenden</h2>
+                        <Button
+                            variant="ghost"
+                            className="w-full justify-start h-auto p-0 font-semibold text-lg hover:bg-transparent"
+                            onClick={handleOverviewClick}
+                        >
+                            Overzicht
+                        </Button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 pt-3">
                         {stakeholders && stakeholders.length > 0 ? (
@@ -89,6 +102,7 @@ export function Sidebar({
                                 selectedStakeholderId={selectedStakeholderId}
                                 onSelectStakeholder={handleSelectStakeholder}
                                 verifiedStakeholderIds={verifiedStakeholderIds}
+                                caseId={selectedCaseId}
                             />
                         ) : (
                             <div className="text-center py-8 text-muted-foreground">
@@ -125,6 +139,7 @@ export function Sidebar({
                                 selectedDocumentId={selectedDocumentId}
                                 onSelectDocument={onSelectDocument || (() => { })}
                                 disabled={step === 'create' && !!selectedCaseId}
+                                caseId={selectedCaseId}
                             />
                         ) : (
                             <div className="text-center py-8 text-muted-foreground">

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -192,7 +192,7 @@ class StakeholderMention(BaseModel):
     confidence: float
     mention_text: str
     mention_bbox: BoundingBox
-    verified: bool
+    verified: Optional[bool] = None
     created_at: str
 
 
@@ -507,8 +507,8 @@ def get_documents():
 
 
 @app.get("/documents/{document_id}", response_model=DocumentDetail)
-def get_document_detail(document_id: str):
-    """Get detailed document information with chunks and stakeholder mentions"""
+def get_document_detail(document_id: str, case_id: Optional[str] = Query(None)):
+    """Get detailed document information with chunks and stakeholder mentions, optionally filtered by case for verification status"""
     document = db.get_document_by_id(document_id)
     logger.info(f"Document: {document}")
     if not document:
@@ -520,7 +520,7 @@ def get_document_detail(document_id: str):
     chunks_with_mentions = []
     for chunk in document_chunks:
         # Get stakeholder mentions for this chunk
-        chunk_stakeholders = db.get_chunk_stakeholders(chunk["id"])
+        chunk_stakeholders = db.get_chunk_stakeholders(chunk["id"], case_id=case_id)
 
         stakeholder_mentions = []
         for cs in chunk_stakeholders:
@@ -542,7 +542,7 @@ def get_document_detail(document_id: str):
                         confidence=cs["confidence"],
                         mention_text=cs["mention_text"],
                         mention_bbox=BoundingBox(**cs["mention_bbox"]),
-                        verified=bool(cs["verified"]),
+                        verified=bool(cs["verified"]) if cs["verified"] is not None else None,
                         created_at=cs["created_at"],
                     )
                 )
@@ -603,16 +603,20 @@ def get_document_pdf(document_id: str):
 
 
 @app.get("/documents/{document_id}/chunks", response_model=ChunkListResponse)
-def get_document_chunks(document_id: str):
-    """Get all chunks for a document with stakeholder mentions"""
+def get_document_chunks(document_id: str, case_id: Optional[str] = Query(None)):
+    """Get all chunks for a document with stakeholder mentions, optionally filtered by case for verification status"""
+    document = db.get_document_by_id(document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
     document_chunks = db.get_chunks_by_document(document_id)
     logger.info(f"Document chunks: {document_chunks}")
     if not document_chunks:
-        raise HTTPException(status_code=404, detail="Document or chunks not found")
+        return ChunkListResponse(chunks=[])
 
     chunks_with_mentions = []
     for chunk in document_chunks:
-        chunk_stakeholders = db.get_chunk_stakeholders(chunk["id"])
+        chunk_stakeholders = db.get_chunk_stakeholders(chunk["id"], case_id=case_id)
 
         stakeholder_mentions = []
         for cs in chunk_stakeholders:
@@ -634,7 +638,7 @@ def get_document_chunks(document_id: str):
                         confidence=cs["confidence"],
                         mention_text=cs["mention_text"],
                         mention_bbox=BoundingBox(**cs["mention_bbox"]),
-                        verified=bool(cs["verified"]),
+                        verified=bool(cs["verified"]) if cs["verified"] is not None else None,
                         created_at=cs["created_at"],
                     )
                 )

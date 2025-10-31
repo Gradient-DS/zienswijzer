@@ -1,13 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
 import type { Document } from '@/types';
+import { transformChunkDetail } from '@/lib/mention-utils';
 
-export const useDocument = (documentId: string | undefined) => {
+export const useDocument = (documentId: string | undefined, caseId?: string | undefined) => {
     return useQuery({
-        queryKey: ['documents', documentId],
+        queryKey: ['documents', documentId, caseId],
         queryFn: async () => {
-            const res = await apiClient.get<Document>(`/documents/${documentId}`);
-            return res.data;
+            const res = await apiClient.get<any>(`/documents/${documentId}`, {
+                params: caseId ? { case_id: caseId } : {}
+            });
+            const document = res.data.document || res.data;
+            return {
+                ...document,
+                chunks: document.chunks?.map(transformChunkDetail) || [],
+            } as Document;
         },
         enabled: !!documentId,
     });

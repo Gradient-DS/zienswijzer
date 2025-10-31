@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
-import type { Case, CaseDetail } from '@/types';
+import { transformChunkDetail } from '@/lib/mention-utils';
+import type { Case, CaseDetail, ChunkDetail } from '@/types';
 
 interface CaseListResponse {
     cases: Case[];
@@ -74,6 +75,49 @@ export const useUpdateCase = () => {
             queryClient.invalidateQueries({ queryKey: ['cases'] });
             queryClient.invalidateQueries({ queryKey: ['cases', variables.id] });
         },
+    });
+};
+
+export const useDocumentCompletionStatus = (caseId: string | undefined) => {
+    return useQuery({
+        queryKey: ['cases', caseId, 'document-completion'],
+        queryFn: async () => {
+            if (!caseId) return new Map<string, boolean>();
+
+            try {
+                const caseRes = await apiClient.get(`/cases/${caseId}`);
+                const documents = caseRes.data.case.documents || [];
+
+                const completionMap = new Map<string, boolean>();
+
+                for (const doc of documents) {
+                    try {
+                        const chunksRes = await apiClient.get<any>(`/documents/${doc.id}/chunks`, {
+                            params: { case_id: caseId }
+                        });
+                        const chunks = (chunksRes.data.chunks || []).map(transformChunkDetail) as ChunkDetail[];
+                        const allMentions = chunks.flatMap((chunk: ChunkDetail) => chunk.stakeholder_mentions || []);
+
+                        if (allMentions.length === 0) {
+                            completionMap.set(doc.id, false);
+                        } else {
+                            const allChecked = allMentions.every((mention) => mention.checked);
+                            completionMap.set(doc.id, allChecked);
+                        }
+                    } catch (error) {
+                        console.error(`Failed to fetch chunks for document ${doc.id}:`, error);
+                        completionMap.set(doc.id, false);
+                    }
+                }
+
+                return completionMap;
+            } catch (error) {
+                console.error('Failed to fetch document completion status:', error);
+                return new Map<string, boolean>();
+            }
+        },
+        enabled: !!caseId,
+        staleTime: 30000, // Cache for 30 seconds
     });
 };
 

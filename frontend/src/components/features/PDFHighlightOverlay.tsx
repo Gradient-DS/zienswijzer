@@ -84,7 +84,7 @@ export function PDFHighlightOverlay({
                     {chunk.transformedMentions.map((mention) => {
                         const color = getHighlightColor(mention.stakeholder.type);
                         const opacity = getHighlightOpacity(mention.confidence);
-                        const borderStyle = mention.verified ? 'solid' : 'dashed';
+                        const borderStyle = mention.checked ? 'solid' : 'dashed';
                         const isSelected = selectedMentionId === mention.id;
 
                         return (

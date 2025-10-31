@@ -58,12 +58,16 @@ def generate_stakeholder_pdf(stakeholder_id: str, request: GeneratePDFRequest):
             doc_pages = set()
 
             for chunk in chunks:
-                chunk_stakeholders = db.get_chunk_stakeholders(chunk["id"])
+                chunk_stakeholders = db.get_chunk_stakeholders(chunk["id"], case_id=request.case_id)
 
-                # Check if this chunk has a mention for our stakeholder
-                has_stakeholder_mention = any(cs["stakeholder_id"] == stakeholder_id for cs in chunk_stakeholders)
+                # Check if this chunk has an ACCEPTED mention for our stakeholder
+                # Only include chunks where the mention is verified=True (accepted)
+                has_accepted_mention = any(
+                    cs["stakeholder_id"] == stakeholder_id and cs.get("verified") is True  # Only accepted mentions
+                    for cs in chunk_stakeholders
+                )
 
-                if has_stakeholder_mention:
+                if has_accepted_mention:
                     relevant_chunks.append(
                         {
                             "chunk": chunk,
