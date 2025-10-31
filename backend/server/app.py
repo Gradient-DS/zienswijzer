@@ -11,6 +11,7 @@ import shutil
 import uuid
 from server import db
 from server.utils.parsing import main as parse_pdf
+from server.utils.ner_processor import MarkdownNERProcessor
 import random
 from server.utils.text_processor import transform_text
 from server.utils.chunk_generator import (
@@ -94,6 +95,7 @@ class BoundingBox(BaseModel):
     y: float
     width: float
     height: float
+    page: int
 
 
 class Document(BaseModel):
@@ -177,9 +179,9 @@ class CaseDetailResponse(BaseModel):
 
 class Stakeholder(BaseModel):
     id: str
-    type: str
+    type: Optional[str] = None
     name: str
-    contact_info: str
+    contact_info: Optional[str] = None
     created_at: str
     updated_at: str
 
@@ -533,9 +535,9 @@ def get_document_detail(document_id: str):
                         stakeholder_id=cs["stakeholder_id"],
                         stakeholder=Stakeholder(
                             id=stakeholder["id"],
-                            type=stakeholder.get("type", ""),
+                            type=stakeholder.get("type"),
                             name=stakeholder["name"],
-                            contact_info=stakeholder.get("contact_info", ""),
+                            contact_info=stakeholder.get("contact_info"),
                             created_at=stakeholder["created_at"],
                             updated_at=stakeholder["updated_at"],
                         ),
@@ -625,9 +627,9 @@ def get_document_chunks(document_id: str):
                         stakeholder_id=cs["stakeholder_id"],
                         stakeholder=Stakeholder(
                             id=stakeholder["id"],
-                            type=stakeholder.get("type", ""),
+                            type=stakeholder.get("type"),
                             name=stakeholder["name"],
-                            contact_info=stakeholder.get("contact_info", ""),
+                            contact_info=stakeholder.get("contact_info"),
                             created_at=stakeholder["created_at"],
                             updated_at=stakeholder["updated_at"],
                         ),
@@ -659,49 +661,59 @@ class UploadDocumentResponse(BaseModel):
 
 def background_parse_document(doc_id: str, page_count: int):
     """Background task to parse document and generate fake chunks/stakeholders"""
-    try:
-        logger.info(f"Starting background parsing for document {doc_id}")
-        parse_pdf(doc_id)
-        logger.info(f"Document {doc_id} parsed successfully")
+    logger.info(f"Starting background parsing for document {doc_id}")
+    parse_pdf(doc_id)
+    logger.info("Starting entity extraction")
+    document = db.get_document_by_id(doc_id)
+    processor = MarkdownNERProcessor(
+        markdown_path=str(document["markdown_path"]),
+        pdf_path=str(document["file_path"]),  # ← PDF for chunking and bounding boxes
+        document_id=doc_id,
+        entity_types=None,
+        stakeholder_types_to_save=["person", "organization"],
+        min_confidence=0.0,
+        model_type="xlm-roberta",
+        model_name="Davlan/xlm-roberta-base-ner-hrl",
+        verbose=True
+    )
+    results = processor.process(create_chunks=True)
 
-        # Generate fake chunks and stakeholders
-        chunks = generate_fake_chunks(doc_id, page_count)
-        new_stakeholders = generate_fake_stakeholders(num_stakeholders=5)
+    document["parse_status"] = "completed"
+    db.update_document(doc_id, document)
 
-        # Save chunks to database
-        for chunk in chunks:
-            db.create_chunk(chunk)
+   
+    #     logger.info(f"Starting background parsing for document {doc_id}")
+    #     parse_pdf(doc_id)
+    #     logger.info(f"Document {doc_id} parsed successfully")
 
-        # Save stakeholders to database (avoid duplicates by name)
-        existing_stakeholders_dict = {s["name"]: s for s in db.get_stakeholders()}
-        stakeholders_to_use = []
+    #     chunks = generate_fake_chunks(doc_id, page_count)
+    #     new_stakeholders = generate_fake_stakeholders(num_stakeholders=5)
+    #     # Save chunks to database
+    #     for chunk in chunks:
+    #         db.create_chunk(chunk)
 
-        for stakeholder in new_stakeholders:
-            if stakeholder["name"] not in existing_stakeholders_dict:
-                db.create_stakeholder(stakeholder)
-                stakeholders_to_use.append(stakeholder)
-            else:
-                stakeholders_to_use.append(existing_stakeholders_dict[stakeholder["name"]])
+    #     # Save stakeholders to database (avoid duplicates by name)
+    #     existing_stakeholders_dict = {s["name"]: s for s in db.get_stakeholders()}
+    #     stakeholders_to_use = []
 
-        # Generate and save chunk-stakeholder relationships
-        chunk_stakeholders = generate_fake_chunk_stakeholders(chunks, stakeholders_to_use)
-        for cs in chunk_stakeholders:
-            db.create_chunk_stakeholder(cs)
+    #     for stakeholder in new_stakeholders:
+    #         if stakeholder["name"] not in existing_stakeholders_dict:
+    #             db.create_stakeholder(stakeholder)
+    #             stakeholders_to_use.append(stakeholder)
+    #         else:
+    #             stakeholders_to_use.append(existing_stakeholders_dict[stakeholder["name"]])
 
-        logger.info(
-            f"Generated {len(chunks)} chunks and {len(chunk_stakeholders)} stakeholder mentions for document {doc_id}"
-        )
-    except Exception as e:
-        logger.error(f"Error processing document {doc_id} in background: {e}", exc_info=True)
-        # Update document status to failed
-        try:
-            document = db.get_document_by_id(doc_id)
-            if document:
-                document["parse_status"] = "failed"
-                db.update_document(doc_id, document)
-        except Exception as update_error:
-            logger.error(f"Failed to update document status: {update_error}")
+    #     # Generate and save chunk-stakeholder relationships
+    #     chunk_stakeholders = generate_fake_chunk_stakeholders(chunks, stakeholders_to_use)
+    #     for cs in chunk_stakeholders:
+    #         db.create_chunk_stakeholder(cs)
 
+    #     logger.info(
+    #         f"Generated {len(chunks)} chunks and {len(chunk_stakeholders)} stakeholder mentions for document {doc_id}"
+    #     )
+
+    # except Exception as e:
+    #     logger.error(f"Error processing document {doc_id} in background: {e}", exc_info=True)
 
 @app.post("/documents/upload", response_model=UploadDocumentResponse)
 async def upload_document(
@@ -748,6 +760,7 @@ async def upload_document(
         "keywords": None,
         "author": None,
         "file_path": str(file_path.relative_to(Path(__file__).parent)),
+        "markdown_path": None,
         "file_size": file_size,
         "page_count": 0,  # Would need PDF parsing to get actual page count
         "parse_status": "pending",
