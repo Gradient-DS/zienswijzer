@@ -1,5 +1,5 @@
-"""Parse documents into markdown.
-"""
+"""Parse documents into markdown."""
+
 import typing as t
 import logging
 
@@ -11,6 +11,7 @@ from server import db
 
 logger = logging.getLogger(__name__)
 
+
 class PDFParser:
     """Parse PDF documents into markdown format."""
 
@@ -20,27 +21,26 @@ class PDFParser:
     def load_pdf(self, pdf_path: t.Union[str, Path]) -> Blob:
         """
         Load a PDF from a file path and return as a Blob.
-        
+
         Args:
             pdf_path: Path to the PDF file
-            
+
         Returns:
             Blob: Langchain Blob object containing the PDF
-            
+
         Raises:
             FileNotFoundError: If the PDF file doesn't exist
             ValueError: If the file is not a PDF
         """
         path = Path(pdf_path)
-        
+
         if not path.exists():
             raise FileNotFoundError(f"PDF file not found: {path}")
-        
-        if path.suffix.lower() != '.pdf':
-            raise ValueError(f"File is not a PDF: {path}")
-        
-        return Blob.from_path(str(path))
 
+        if path.suffix.lower() != ".pdf":
+            raise ValueError(f"File is not a PDF: {path}")
+
+        return Blob.from_path(str(path))
 
     def parse(self, blob: Blob, verbose: bool = False) -> t.List[LCDocument]:
         """
@@ -58,7 +58,6 @@ class PDFParser:
 
         page_docs: t.List[LCDocument] = list(self.parser.lazy_parse(blob))
         return page_docs
-        
 
     def parse_batch(self, blobs: t.List[Blob], verbose: bool = False) -> t.Dict[str, t.List[LCDocument]]:
         """
@@ -77,48 +76,78 @@ class PDFParser:
         for idx, blob in enumerate(blobs, start=1):
             if verbose:
                 print(f"Parsing PDF {idx}/{total}: {blob.source}")
-            
+
             docs = self.parse(blob, verbose=verbose)
             if docs:
                 results[blob.source] = docs
 
         return results
 
+
 class EntityExtractor:
     """Extract entities from a document."""
+
     def __init__(self):
         return "TEST"
 
 
-def main(doc_id: str):
+def main(doc_id: str) -> str:
+    """
+    Parse a document and extract its content as markdown.
+    
+    Args:
+        doc_id: The ID of the document to parse
+        
+    Returns:
+        str: Path to the generated markdown file
+    """
     document = db.get_document_by_id(doc_id)
     if not document:
         raise ValueError(f"Document not found: {doc_id}")
-    INPUT_PATH = Path(document["file_path"])
-    
+
+    INPUT_PATH = Path(__file__).parent.parent / document["file_path"]
+
     logger.info(f"Parsing document")
     parser = PDFParser()
-    results = parser.parse(blob=parser.load_pdf(INPUT_PATH), verbose=True)
+    blob = parser.load_pdf(INPUT_PATH)
+    results = parser.parse(blob=blob, verbose=True)
 
-    document["title"] = results[0].metadata["title"]
-    document["page_count"] = results[0].metadata["total_pages"]
-    document["keywords"] = results[0].metadata["keywords"]
-    document["author"] = results[0].metadata["author"]
+    # Extract markdown content from results
+    markdown_content = []
+    for page_num, doc in enumerate(results, start=1):
+        markdown_content.append(f"# Page {page_num}\n\n")
+        markdown_content.append(doc.page_content)
+        markdown_content.append("\n\n---\n\n")
+    
+    # Combine all pages into a single markdown string
+    full_markdown = "".join(markdown_content)
+    
+    # Create markdown file path (same name as PDF but with .md extension)
+    markdown_path = INPUT_PATH.with_suffix('.md')
+    
+    # Write markdown to file
+    markdown_path.write_text(full_markdown, encoding='utf-8')
+    logger.info(f"Markdown file created: {markdown_path}")
+
+    # Update document metadata
+    document["title"] = results[0].metadata.get("title", "")
+    document["page_count"] = results[0].metadata.get("total_pages", len(results))
+    document["keywords"] = results[0].metadata.get("keywords", "")
+    document["author"] = results[0].metadata.get("author", "")
     document["parse_status"] = "parsed"
+    document["markdown_path"] = str(markdown_path)
 
     db.update_document(doc_id, document)
 
-    logger.info(f"Document parsed, extracting entities")
-
-    #entity_extractor = EntityExtractor()
-    #entity_extractor.extract(results)
+    logger.info(f"Document parsed successfully")
+    
 
 
 if __name__ == "__main__":
     # Example usage
     INPUT_DIR = Path("data/pdfs")
     INPUT_FILE = Path("data/document.pdf")
-    
+
     # Parse the PDFs
     parser = PDFParser()
     blob = parser.load_pdf(INPUT_FILE)

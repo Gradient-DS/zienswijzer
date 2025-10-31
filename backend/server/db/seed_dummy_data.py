@@ -120,7 +120,7 @@ DUMMY_STAKEHOLDERS = [
         "id": "stakeholder_1",
         "type": "organization",
         "name": "Environmental Agency",
-        "contactInfo": "contact@environmental-agency.gov.nl",
+        "contactInfo": "lex@gradient-ds.com",
         "createdAt": "2024-01-10T08:00:00Z",
         "updatedAt": "2024-01-10T08:00:00Z",
     },
@@ -128,7 +128,7 @@ DUMMY_STAKEHOLDERS = [
         "id": "stakeholder_2",
         "type": "government",
         "name": "Local Council",
-        "contactInfo": "info@localcouncil.nl",
+        "contactInfo": "lex@gradient-ds.com",
         "createdAt": "2024-01-11T10:00:00Z",
         "updatedAt": "2024-01-11T10:00:00Z",
     },
@@ -136,7 +136,7 @@ DUMMY_STAKEHOLDERS = [
         "id": "stakeholder_3",
         "type": "community",
         "name": "Community Group A",
-        "contactInfo": "contact@communitygroupa.org",
+        "contactInfo": "lex@gradient-ds.com",
         "createdAt": "2024-01-12T09:00:00Z",
         "updatedAt": "2024-01-12T09:00:00Z",
     },
@@ -144,7 +144,7 @@ DUMMY_STAKEHOLDERS = [
         "id": "stakeholder_4",
         "type": "organization",
         "name": "Business Association B",
-        "contactInfo": "info@businessassocb.nl",
+        "contactInfo": "lex@gradient-ds.com",
         "createdAt": "2024-01-13T11:00:00Z",
         "updatedAt": "2024-01-13T11:00:00Z",
     },
@@ -253,176 +253,203 @@ DUMMY_CASES = [
 
 def seed_database():
     """Populate the database with dummy data for testing."""
-    
+
     # Initialize the database first
     init_db()
     print("[OK] Database initialized")
-    
+
     conn = get_connection()
     cursor = conn.cursor()
-    
+
     try:
         # 1. Create users
         print("\n[SEEDING] Users...")
         for user in DUMMY_USERS:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO Users (id, username, email, password, avatar, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                user["id"],
-                user["username"],
-                user["email"],
-                "password123",  # Default password for all users
-                user["avatar"],
-                "2024-01-01T00:00:00Z",
-                "2024-01-01T00:00:00Z",
-            ))
+            """,
+                (
+                    user["id"],
+                    user["username"],
+                    user["email"],
+                    "password123",  # Default password for all users
+                    user["avatar"],
+                    "2024-01-01T00:00:00Z",
+                    "2024-01-01T00:00:00Z",
+                ),
+            )
             print(f"  [+] {user['username']} ({user['email']})")
-        
+
         # 2. Create workspaces
         print("\n[SEEDING] Workspaces...")
         for workspace in DUMMY_WORKSPACES:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO Workspaces (id, name, description, created_at, updated_at, owner_id)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                workspace["id"],
-                workspace["name"],
-                workspace["description"],
-                workspace["createdAt"],
-                workspace["updatedAt"],
-                workspace["ownerId"],
-            ))
+            """,
+                (
+                    workspace["id"],
+                    workspace["name"],
+                    workspace["description"],
+                    workspace["createdAt"],
+                    workspace["updatedAt"],
+                    workspace["ownerId"],
+                ),
+            )
             print(f"  [+] {workspace['name']}")
-            
+
             # Add workspace members
             member_count = workspace["memberCount"]
             for i in range(min(member_count, len(DUMMY_USERS))):
                 user_id = DUMMY_USERS[i]["id"]
                 is_owner = 1 if user_id == workspace["ownerId"] else 0
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO WorkspaceMembers (workspace_id, user_id, is_owner, joined_at)
                     VALUES (?, ?, ?, ?)
-                """, (
-                    workspace["id"],
-                    user_id,
-                    is_owner,
-                    workspace["createdAt"],
-                ))
+                """,
+                    (
+                        workspace["id"],
+                        user_id,
+                        is_owner,
+                        workspace["createdAt"],
+                    ),
+                )
                 print(f"    [+] Member: {DUMMY_USERS[i]['username']}")
-        
+
         # 3. Create documents
         print("\n[SEEDING] Documents...")
         for doc in DUMMY_DOCUMENTS:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO Documents (
                     id, title, description, type, file_path, file_size, page_count,
                     processing_status, uploaded_at, processed_at, created_at, updated_at
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                doc["id"],
-                doc["title"],
-                doc["description"],
-                doc["type"],
-                doc["filePath"],
-                doc["fileSize"],
-                doc["pageCount"],
-                doc["processingStatus"],
-                doc["uploadedAt"],
-                doc["processedAt"],
-                doc["createdAt"],
-                doc["updatedAt"],
-            ))
+            """,
+                (
+                    doc["id"],
+                    doc["title"],
+                    doc["description"],
+                    doc["type"],
+                    doc["filePath"],
+                    doc["fileSize"],
+                    doc["pageCount"],
+                    doc["processingStatus"],
+                    doc["uploadedAt"],
+                    doc["processedAt"],
+                    doc["createdAt"],
+                    doc["updatedAt"],
+                ),
+            )
             print(f"  [+] {doc['title']} ({doc['type']})")
-        
+
         # 4. Create stakeholders
         print("\n[SEEDING] Stakeholders...")
         for stakeholder in DUMMY_STAKEHOLDERS:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO Stakeholders (id, type, name, contact_info, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                stakeholder["id"],
-                stakeholder["type"],
-                stakeholder["name"],
-                stakeholder["contactInfo"],
-                stakeholder["createdAt"],
-                stakeholder["updatedAt"],
-            ))
+            """,
+                (
+                    stakeholder["id"],
+                    stakeholder["type"],
+                    stakeholder["name"],
+                    stakeholder["contactInfo"],
+                    stakeholder["createdAt"],
+                    stakeholder["updatedAt"],
+                ),
+            )
             print(f"  [+] {stakeholder['name']} ({stakeholder['type']})")
-        
+
         # 5. Create chunks
         print("\n[SEEDING] Chunks...")
         for chunk in DUMMY_CHUNKS:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO Chunks (id, document_id, page, context, bbox, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                chunk["id"],
-                chunk["documentId"],
-                chunk["page"],
-                chunk["context"],
-                json.dumps(chunk["bbox"]),
-                "2024-01-20T10:00:00Z",
-            ))
+            """,
+                (
+                    chunk["id"],
+                    chunk["documentId"],
+                    chunk["page"],
+                    chunk["context"],
+                    json.dumps(chunk["bbox"]),
+                    "2024-01-20T10:00:00Z",
+                ),
+            )
             print(f"  [+] {chunk['id']} (page {chunk['page']})")
-        
+
         # 6. Create chunk-stakeholder relationships
         print("\n[SEEDING] Chunk-Stakeholder relationships...")
         for cs in DUMMY_CHUNK_STAKEHOLDERS:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO ChunkStakeholders (
                     id, chunk_id, stakeholder_id, confidence, mention_text, mention_bbox, verified, created_at
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                cs["id"],
-                cs["chunkId"],
-                cs["stakeholderId"],
-                cs["confidence"],
-                cs["mentionText"],
-                json.dumps(cs["mentionBbox"]),
-                1 if cs["verified"] else 0,
-                cs["createdAt"],
-            ))
+            """,
+                (
+                    cs["id"],
+                    cs["chunkId"],
+                    cs["stakeholderId"],
+                    cs["confidence"],
+                    cs["mentionText"],
+                    json.dumps(cs["mentionBbox"]),
+                    1 if cs["verified"] else 0,
+                    cs["createdAt"],
+                ),
+            )
             print(f"  [+] {cs['id']} ({cs['mentionText']}, confidence: {cs['confidence']:.2f})")
-        
+
         # 7. Create cases
         print("\n[SEEDING] Cases...")
         for case in DUMMY_CASES:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO Cases (id, title, description, password, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                case["id"],
-                case["title"],
-                case["description"],
-                None,
-                case["createdAt"],
-                case["updatedAt"],
-            ))
+            """,
+                (
+                    case["id"],
+                    case["title"],
+                    case["description"],
+                    None,
+                    case["createdAt"],
+                    case["updatedAt"],
+                ),
+            )
             print(f"  [+] {case['title']}")
-            
+
             # Add case-document relationships
             for doc_id in case["documentIds"]:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO CaseDocuments (case_id, document_id, added_at)
                     VALUES (?, ?, ?)
-                """, (
-                    case["id"],
-                    doc_id,
-                    case["createdAt"],
-                ))
+                """,
+                    (
+                        case["id"],
+                        doc_id,
+                        case["createdAt"],
+                    ),
+                )
                 print(f"    [+] Document: {doc_id}")
-        
+
         # Commit all changes
         conn.commit()
-        
+
         # Print summary
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("SUMMARY OF DUMMY DATA")
-        print("="*60)
+        print("=" * 60)
         print(f"Users:               {len(DUMMY_USERS)}")
         print(f"Workspaces:          {len(DUMMY_WORKSPACES)}")
         print(f"Documents:           {len(DUMMY_DOCUMENTS)}")
@@ -430,9 +457,9 @@ def seed_database():
         print(f"Chunks:              {len(DUMMY_CHUNKS)}")
         print(f"Chunk-Stakeholders:  {len(DUMMY_CHUNK_STAKEHOLDERS)}")
         print(f"Cases:               {len(DUMMY_CASES)}")
-        print("="*60)
+        print("=" * 60)
         print("\n[SUCCESS] All dummy data successfully seeded!")
-        
+
     except Exception as e:
         conn.rollback()
         print(f"\n[ERROR] Error seeding database: {e}")
