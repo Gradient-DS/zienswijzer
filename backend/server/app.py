@@ -784,9 +784,57 @@ async def upload_document(case_id: str, file: UploadFile = File(...)):
 # See backend/server/email/README.md for detailed documentation
 # =============================================================================
 
+# =============================================================================
+
+
 from server.email import email_router
 
 app.include_router(email_router)
+
+
+# VERIFICATION INTEGRATION
+# =============================================================================
+# Verification endpoints for chunk stakeholder mentions
+# Provides functionality to verify or unverify stakeholder mentions individually
+# or in bulk based on confidence thresholds
+#
+# Available endpoints:
+#   - POST /verification/mention/{mention_id}  - Verify/unverify single mention
+#   - POST /verification/bulk                  - Bulk verify mentions by filter
+#
+# Bulk verification filters:
+#   - "high"   - Verify mentions with confidence >= 0.9
+#   - "medium" - Verify mentions with confidence >= 0.7
+#   - "all"    - Verify all unverified mentions regardless of confidence
+#
+# See backend/server/verification.py for implementation details
+# =============================================================================
+
+from server.verification import verification_router
+
+app.include_router(verification_router)
+
+
+# =============================================================================
+# PDF GENERATION INTEGRATION
+# =============================================================================
+# PDF generation endpoints for stakeholders
+# Provides functionality to generate PDFs based on stakeholder mentions
+#
+# Available endpoints:
+#   - POST /pdf/stakeholders/{stakeholder_id}/generate  - Generate PDF for stakeholder
+#
+# Content types:
+#   - "full_documents" - Include all PDF documents from the case
+#   - "pages_only"     - Extract only pages containing stakeholder mentions
+#   - "chunks_only"    - Create text-based PDF with chunk excerpts
+#
+# See backend/server/pdf.py for implementation details
+# =============================================================================
+
+from server.pdf import pdf_router
+
+app.include_router(pdf_router)
 
 
 if __name__ == "__main__":

@@ -888,3 +888,38 @@ def create_chunk_stakeholder(chunk_stakeholder: Dict[str, Any]) -> None:
             ),
         )
         connection.commit()
+
+
+def get_chunk_stakeholders_by_id(mention_id: str) -> Optional[Dict[str, Any]]:
+    """Get a single chunk stakeholder mention by ID."""
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            SELECT cs.id, cs.chunk_id, cs.stakeholder_id, cs.confidence, cs.mention_text,
+                   cs.mention_bbox, cs.verified, cs.created_at
+            FROM ChunkStakeholders cs
+            WHERE cs.id = ?
+        """,
+            (mention_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            mention = dict(row)
+            mention["mention_bbox"] = json.loads(mention["mention_bbox"])
+            mention["verified"] = bool(mention["verified"])
+            return mention
+        return None
+
+
+def update_chunk_stakeholder_verified(mention_id: str, verified: bool) -> None:
+    """Update the verification status of a chunk stakeholder mention."""
+    with get_connection() as connection:
+        connection.execute(
+            """
+            UPDATE ChunkStakeholders
+            SET verified = ?
+            WHERE id = ?
+        """,
+            (1 if verified else 0, mention_id),
+        )
+        connection.commit()

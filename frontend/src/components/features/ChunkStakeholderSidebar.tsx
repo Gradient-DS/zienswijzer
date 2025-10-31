@@ -1,7 +1,9 @@
 import { useMemo, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
+import { useVerifyMention, useBulkVerifyMentions } from '@/api/verification';
 import type { ChunkDetail, StakeholderMention } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +13,7 @@ interface ChunkStakeholderSidebarProps {
     onMentionClick?: (mention: StakeholderMention) => void;
     onClose?: () => void;
     className?: string;
+    caseId?: string;
 }
 
 const STAKEHOLDER_COLORS: Record<string, string> = {
@@ -47,18 +50,28 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
     );
 }
 
-function VerificationBadge({ verified }: { verified: boolean }) {
+function VerificationBadge({
+    verified,
+    onToggle
+}: {
+    verified: boolean;
+    onToggle: () => void;
+}) {
     return (
-        <span
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                onToggle();
+            }}
             className={cn(
-                'px-2 py-0.5 rounded text-xs font-medium',
+                'px-2 py-0.5 rounded text-xs font-medium cursor-pointer transition-colors',
                 verified
-                    ? 'bg-green-100 text-green-800 border border-green-300'
-                    : 'bg-gray-100 text-gray-600 border border-gray-300'
+                    ? 'bg-green-100 text-green-800 border border-green-300 hover:bg-green-200'
+                    : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
             )}
         >
             {verified ? 'Geverifieerd' : 'Niet geverifieerd'}
-        </span>
+        </button>
     );
 }
 
@@ -68,9 +81,15 @@ export function ChunkStakeholderSidebar({
     onMentionClick,
     onClose,
     className,
+    caseId,
 }: ChunkStakeholderSidebarProps) {
     const sidebarRef = useRef<HTMLDivElement>(null);
     const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+    const verifyMention = useVerifyMention();
+    const bulkVerify = useBulkVerifyMentions();
+    const location = useLocation();
+
+    const resolvedCaseId = caseId || location.pathname.match(/\/cases\/([^/]+)/)?.[1];
 
     const allMentions = useMemo(() => {
         const mentions: Array<{
@@ -110,6 +129,48 @@ export function ChunkStakeholderSidebar({
         });
         return grouped;
     }, [allMentions]);
+
+    const unverifiedMentions = useMemo(() => {
+        return allMentions.filter(({ mention }) => !mention.verified);
+    }, [allMentions]);
+
+    const handleBulkVerify = async (filterType: 'high' | 'medium' | 'all') => {
+        if (!resolvedCaseId) {
+            alert('Case ID niet gevonden');
+            return;
+        }
+
+        const stakeholdersToVerify = new Set<string>();
+        unverifiedMentions.forEach(({ mention }) => {
+            const confidence = mention.confidence;
+            if (filterType === 'high' && confidence >= 0.9) {
+                stakeholdersToVerify.add(mention.stakeholder_id);
+            } else if (filterType === 'medium' && confidence >= 0.7) {
+                stakeholdersToVerify.add(mention.stakeholder_id);
+            } else if (filterType === 'all') {
+                stakeholdersToVerify.add(mention.stakeholder_id);
+            }
+        });
+
+        if (stakeholdersToVerify.size === 0) {
+            alert('Geen vermeldingen gevonden die voldoen aan de criteria');
+            return;
+        }
+
+        try {
+            for (const stakeholderId of stakeholdersToVerify) {
+                await bulkVerify.mutateAsync({
+                    stakeholder_id: stakeholderId,
+                    case_id: resolvedCaseId,
+                    filter_type: filterType,
+                    verified: true,
+                });
+            }
+        } catch (error) {
+            console.error('Failed to bulk verify:', error);
+            alert('Bulk verificatie mislukt.');
+        }
+    };
 
     useEffect(() => {
         if (selectedMentionId && sidebarRef.current) {
@@ -200,6 +261,43 @@ export function ChunkStakeholderSidebar({
                     </div>
                 </div>
 
+                {unverifiedMentions.length > 0 && resolvedCaseId && (
+                    <div className="pb-3 border-b border-gray-300 space-y-2">
+                        <p className="text-xs font-medium text-gray-700">
+                            Bulk verificatie:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleBulkVerify('high')}
+                                disabled={bulkVerify.isPending}
+                                className="h-7 text-xs px-2"
+                            >
+                                Hoog ({unverifiedMentions.filter(({ mention }) => mention.confidence >= 0.9).length})
+                            </Button>
+                            <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleBulkVerify('medium')}
+                                disabled={bulkVerify.isPending}
+                                className="h-7 text-xs px-2"
+                            >
+                                Medium+ ({unverifiedMentions.filter(({ mention }) => mention.confidence >= 0.7).length})
+                            </Button>
+                            <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleBulkVerify('all')}
+                                disabled={bulkVerify.isPending}
+                                className="h-7 text-xs px-2"
+                            >
+                                Alles ({unverifiedMentions.length})
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
                 {Array.from(mentionsByPage.entries()).map(([pageNum, mentions]) => (
                     <div key={pageNum} className="space-y-3">
                         <div className="sticky top-0 bg-gray-50 py-2 px-2 rounded border border-gray-200 -mx-2 z-10">
@@ -207,7 +305,7 @@ export function ChunkStakeholderSidebar({
                                 Pagina {pageNum} • {mentions.length} {mentions.length === 1 ? 'vermelding' : 'vermeldingen'}
                             </h4>
                         </div>
-                        {mentions.map(({ mention, chunk }) => {
+                        {mentions.map(({ mention }) => {
                             const color = getStakeholderColor(mention.stakeholder.type);
                             const isSelected = selectedMentionId === mention.id;
 
@@ -255,19 +353,17 @@ export function ChunkStakeholderSidebar({
                                                 "{mention.mention_text}"
                                             </p>
                                         </div>
-                                        <div className="flex items-center justify-between pt-1">
-                                            <VerificationBadge verified={mention.verified} />
-                                            <span className="text-xs text-gray-500">
-                                                Pagina {chunk.page}
-                                            </span>
+                                        <div className="flex items-center justify-start pt-1">
+                                            <VerificationBadge
+                                                verified={mention.verified}
+                                                onToggle={() => {
+                                                    verifyMention.mutate({
+                                                        mentionId: mention.id,
+                                                        verified: !mention.verified,
+                                                    });
+                                                }}
+                                            />
                                         </div>
-                                        {mention.stakeholder.contact_info && (
-                                            <div className="pt-1 border-t border-gray-200">
-                                                <p className="text-xs text-gray-500">
-                                                    Contact: {mention.stakeholder.contact_info}
-                                                </p>
-                                            </div>
-                                        )}
                                     </CardContent>
                                 </Card>
                             );

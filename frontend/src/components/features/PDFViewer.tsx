@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { Document as PDFDocument, Page as PDFPage, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -30,6 +31,7 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+    const { id: caseId } = useParams<{ id: string }>();
 
     const { data: document, isLoading: documentLoading } = useDocument(documentId);
     const pdfUrl = getDocumentPdfUrl(documentId);
@@ -213,6 +215,7 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
                             setChunkSidebarOpen(false);
                             setSelectedMentionId(null);
                         }}
+                        caseId={caseId}
                     />
                 )}
             </div>
