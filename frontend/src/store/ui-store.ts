@@ -12,22 +12,16 @@ export const useUIStore = create<UIState>((set) => ({
     isSidebarOpen: true,
     isChunkSidebarOpen: false,
     toggleSidebar: () =>
-        set((state) => {
-            const newMainSidebarState = !state.isSidebarOpen;
-            return {
-                isSidebarOpen: newMainSidebarState,
-                isChunkSidebarOpen: newMainSidebarState ? false : state.isChunkSidebarOpen,
-            };
-        }),
+        set((state) => ({
+            isSidebarOpen: !state.isSidebarOpen,
+        })),
     setSidebarOpen: (open) =>
-        set((state) => ({
+        set({
             isSidebarOpen: open,
-            isChunkSidebarOpen: open ? false : state.isChunkSidebarOpen,
-        })),
+        }),
     setChunkSidebarOpen: (open) =>
-        set((state) => ({
+        set({
             isChunkSidebarOpen: open,
-            isSidebarOpen: open ? false : state.isSidebarOpen,
-        })),
+        }),
 }));
 

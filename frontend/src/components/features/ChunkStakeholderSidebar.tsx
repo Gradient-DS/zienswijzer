@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
@@ -71,6 +71,9 @@ export function ChunkStakeholderSidebar({
     onClose,
     className,
 }: ChunkStakeholderSidebarProps) {
+    const sidebarRef = useRef<HTMLDivElement>(null);
+    const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
     const pageMentions = useMemo(() => {
         const pageChunks = chunks.filter((chunk) => chunk.page === currentPage);
         const mentions: Array<{
@@ -84,19 +87,70 @@ export function ChunkStakeholderSidebar({
             });
         });
 
-        return mentions;
+        return mentions.sort((a, b) => {
+            const aY = a.mention.mentionBbox.y;
+            const bY = b.mention.mentionBbox.y;
+            const aX = a.mention.mentionBbox.x;
+            const bX = b.mention.mentionBbox.x;
+
+            if (aY !== bY) {
+                return aY - bY;
+            }
+            return aX - bX;
+        });
     }, [chunks, currentPage]);
+
+    useEffect(() => {
+        if (selectedMentionId && sidebarRef.current) {
+            const cardElement = cardRefs.current.get(selectedMentionId);
+            if (cardElement) {
+                setTimeout(() => {
+                    cardElement.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center',
+                    });
+                }, 100);
+            }
+        }
+    }, [selectedMentionId, pageMentions]);
 
     if (pageMentions.length === 0) {
         return (
             <div
                 className={cn(
-                    'w-80 border-l bg-gray-100 p-4 flex items-center justify-center',
+                    'w-80 border-l bg-gray-100 overflow-y-auto',
                     className
                 )}
             >
-                <div className="text-sm text-gray-500 text-center">
-                    Geen stakeholder vermeldingen op deze pagina
+                <div className="p-4">
+                    <div className="pb-2 border-b border-gray-300">
+                        <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                                <h3 className="text-sm font-semibold text-gray-700">
+                                    Stakeholder vermeldingen
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Pagina {currentPage}
+                                </p>
+                            </div>
+                            {onClose && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 flex-shrink-0"
+                                    onClick={onClose}
+                                    aria-label="Sluit sidebar"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-center py-8">
+                        <div className="text-sm text-gray-500 text-center">
+                            Geen stakeholder vermeldingen op deze pagina
+                        </div>
+                    </div>
                 </div>
             </div>
         );
@@ -104,6 +158,7 @@ export function ChunkStakeholderSidebar({
 
     return (
         <div
+            ref={sidebarRef}
             className={cn(
                 'w-80 border-l bg-gray-100 overflow-y-auto',
                 className
@@ -142,6 +197,13 @@ export function ChunkStakeholderSidebar({
                     return (
                         <Card
                             key={mention.id}
+                            ref={(el) => {
+                                if (el) {
+                                    cardRefs.current.set(mention.id, el);
+                                } else {
+                                    cardRefs.current.delete(mention.id);
+                                }
+                            }}
                             className={cn(
                                 'cursor-pointer hover:shadow-md transition-all border-2',
                                 isSelected && 'ring-2 ring-blue-500 ring-offset-2 shadow-lg'
