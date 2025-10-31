@@ -485,6 +485,177 @@ def get_case_stakeholders(case_id: str):
     return StakeholderListResponse(stakeholders=stakeholders)
 
 
+# Case Overview Models
+class ObjectedChunk(BaseModel):
+    """Chunk that was objected to"""
+
+    chunk_id: str
+    document_id: str
+    document_title: str
+    page: int
+    context: str
+    stakeholder_id: str
+    stakeholder_name: str
+
+
+class DocumentStatus(BaseModel):
+    """Status of a document in the case"""
+
+    document_id: str
+    document_title: str
+    is_ok: bool  # True if all stakeholders agree or no objections
+    objected_chunks: List[ObjectedChunk]
+
+
+class StakeholderResponse(BaseModel):
+    """Stakeholder response information"""
+
+    stakeholder_id: str
+    stakeholder_name: str
+    publication_status: Optional[str]  # 'agree', 'disagree', 'pending', or None
+    has_replied: bool
+
+
+class CaseOverviewResponse(BaseModel):
+    """Complete overview of case status"""
+
+    case_id: str
+    case_title: str
+    documents: List[DocumentStatus]
+    stakeholders: List[StakeholderResponse]
+    total_documents: int
+    total_objected_chunks: int
+    all_stakeholders_responded: bool
+
+
+@app.get("/cases/{case_id}/overview", response_model=CaseOverviewResponse)
+def get_case_overview(case_id: str):
+    """
+    Get comprehensive overview of case including document status, objected chunks, and stakeholder responses.
+
+    This endpoint provides:
+    - Status of each document (ok vs has objections)
+    - List of objected chunks with stakeholder information
+    - Response status of each stakeholder
+    - Overall case completion status
+    """
+    case = db.get_case_by_id(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    # Get all documents for this case
+    document_ids = case.get("document_ids", [])
+    documents_status = []
+    total_objected_chunks = 0
+    all_stakeholder_ids = set()
+
+    # Get all stakeholders for this case (with publication_status)
+    stakeholders_data = db.get_case_stakeholders(case_id)
+    stakeholders_map = {}
+    for s in stakeholders_data:
+        # Get full stakeholder data including publication_status
+        full_stakeholder = db.get_stakeholder_by_id(s["id"])
+        if full_stakeholder:
+            stakeholders_map[s["id"]] = full_stakeholder
+        else:
+            stakeholders_map[s["id"]] = s
+
+    # Get all sent emails for this case to check responses
+    sent_emails_data = db.get_sent_emails(case_id=case_id)
+    stakeholder_email_map = {}  # stakeholder_id -> list of sent emails
+    for email in sent_emails_data:
+        stakeholder_id = email.get("stakeholder_id")
+        if stakeholder_id:
+            if stakeholder_id not in stakeholder_email_map:
+                stakeholder_email_map[stakeholder_id] = []
+            stakeholder_email_map[stakeholder_id].append(email)
+
+    # Check which stakeholders have replied
+    stakeholder_has_replied = {}
+    for stakeholder_id, emails in stakeholder_email_map.items():
+        has_reply = False
+        for email in emails:
+            replies = db.get_email_replies(email["id"])
+            if replies:
+                has_reply = True
+                break
+        stakeholder_has_replied[stakeholder_id] = has_reply
+
+    # Process each document
+    for doc_id in document_ids:
+        doc = db.get_document_by_id(doc_id)
+        if not doc:
+            continue
+
+        # Get all chunks for this document with case-specific verification status
+        chunks = db.get_chunks_by_document(doc_id)
+        objected_chunks = []
+
+        for chunk in chunks:
+            # Get stakeholder mentions for this chunk with case verification
+            chunk_stakeholders = db.get_chunk_stakeholders(chunk["id"], case_id=case_id)
+
+            for cs in chunk_stakeholders:
+                stakeholder_id = cs["stakeholder_id"]
+                all_stakeholder_ids.add(stakeholder_id)
+
+                # Check if this mention is objected (verified=False in CaseChunkStakeholderVerification)
+                verification_status = db.get_case_mention_verification(case_id, cs["id"])
+
+                # If verification is False (0), it means objected
+                if verification_status is False:
+                    stakeholder = stakeholders_map.get(stakeholder_id, {})
+                    objected_chunks.append(
+                        ObjectedChunk(
+                            chunk_id=chunk["id"],
+                            document_id=doc_id,
+                            document_title=doc["title"],
+                            page=chunk["page"],
+                            context=chunk["context"],
+                            stakeholder_id=stakeholder_id,
+                            stakeholder_name=stakeholder.get("name", "Unknown"),
+                        )
+                    )
+                    total_objected_chunks += 1
+
+        # Document is OK if no objected chunks
+        documents_status.append(
+            DocumentStatus(
+                document_id=doc_id,
+                document_title=doc["title"],
+                is_ok=(len(objected_chunks) == 0),
+                objected_chunks=objected_chunks,
+            )
+        )
+
+    # Build stakeholder responses list
+    stakeholder_responses = []
+    for stakeholder_id, stakeholder_data in stakeholders_map.items():
+        stakeholder_responses.append(
+            StakeholderResponse(
+                stakeholder_id=stakeholder_id,
+                stakeholder_name=stakeholder_data.get("name", ""),
+                publication_status=stakeholder_data.get("publication_status"),
+                has_replied=stakeholder_has_replied.get(stakeholder_id, False),
+            )
+        )
+
+    # Check if all stakeholders have responded
+    all_responded = len(all_stakeholder_ids) > 0 and all(
+        stakeholder_has_replied.get(sid, False) for sid in all_stakeholder_ids
+    )
+
+    return CaseOverviewResponse(
+        case_id=case_id,
+        case_title=case["title"],
+        documents=documents_status,
+        stakeholders=stakeholder_responses,
+        total_documents=len(documents_status),
+        total_objected_chunks=total_objected_chunks,
+        all_stakeholders_responded=all_responded,
+    )
+
+
 # Documents routes
 @app.get("/documents")
 def get_documents():
@@ -681,14 +852,13 @@ def background_parse_document(doc_id: str, page_count: int):
         min_confidence=0.0,
         model_type="xlm-roberta",
         model_name="Davlan/xlm-roberta-base-ner-hrl",
-        verbose=True
+        verbose=True,
     )
     results = processor.process(create_chunks=True)
 
     document["parse_status"] = "completed"
     db.update_document(doc_id, document)
 
-   
     #     logger.info(f"Starting background parsing for document {doc_id}")
     #     parse_pdf(doc_id)
     #     logger.info(f"Document {doc_id} parsed successfully")
@@ -721,6 +891,7 @@ def background_parse_document(doc_id: str, page_count: int):
 
     # except Exception as e:
     #     logger.error(f"Error processing document {doc_id} in background: {e}", exc_info=True)
+
 
 @app.post("/documents/upload", response_model=UploadDocumentResponse)
 async def upload_document(
@@ -829,14 +1000,13 @@ def create_stakeholder(request: CreateStakeholderRequest):
         valid_statuses = ["agree", "disagree", "pending"]
         if request.publication_status not in valid_statuses:
             raise HTTPException(
-                status_code=400,
-                detail=f"Invalid publication_status. Must be one of: {', '.join(valid_statuses)}"
+                status_code=400, detail=f"Invalid publication_status. Must be one of: {', '.join(valid_statuses)}"
             )
-    
+
     # Generate ID and timestamps
     stakeholder_id = f"stakeholder_{uuid.uuid4().hex[:8]}"
     now = datetime.now().isoformat() + "Z"
-    
+
     # Create stakeholder data
     new_stakeholder = {
         "id": stakeholder_id,
@@ -847,20 +1017,22 @@ def create_stakeholder(request: CreateStakeholderRequest):
         "created_at": now,
         "updated_at": now,
     }
-    
+
     # Save to database
     db.create_stakeholder(new_stakeholder)
-    
+
     # Return created stakeholder
-    return CreateStakeholderResponse(stakeholder=Stakeholder(
-        id=new_stakeholder["id"],
-        type=new_stakeholder.get("type"),
-        name=new_stakeholder["name"],
-        contact_info=new_stakeholder.get("contact_info"),
-        publication_status=new_stakeholder.get("publication_status"),
-        created_at=new_stakeholder["created_at"],
-        updated_at=new_stakeholder["updated_at"]
-    ))
+    return CreateStakeholderResponse(
+        stakeholder=Stakeholder(
+            id=new_stakeholder["id"],
+            type=new_stakeholder.get("type"),
+            name=new_stakeholder["name"],
+            contact_info=new_stakeholder.get("contact_info"),
+            publication_status=new_stakeholder.get("publication_status"),
+            created_at=new_stakeholder["created_at"],
+            updated_at=new_stakeholder["updated_at"],
+        )
+    )
 
 
 @app.get("/stakeholders", response_model=StakeholderListResponse)
@@ -869,15 +1041,17 @@ def get_stakeholders():
     stakeholders_data = db.get_stakeholders()
     stakeholders = []
     for stakeholder in stakeholders_data:
-        stakeholders.append(Stakeholder(
-            id=stakeholder["id"],
-            type=stakeholder.get("type"),
-            name=stakeholder["name"],
-            contact_info=stakeholder.get("contact_info"),
-            publication_status=stakeholder.get("publication_status"),
-            created_at=stakeholder["created_at"],
-            updated_at=stakeholder["updated_at"]
-        ))
+        stakeholders.append(
+            Stakeholder(
+                id=stakeholder["id"],
+                type=stakeholder.get("type"),
+                name=stakeholder["name"],
+                contact_info=stakeholder.get("contact_info"),
+                publication_status=stakeholder.get("publication_status"),
+                created_at=stakeholder["created_at"],
+                updated_at=stakeholder["updated_at"],
+            )
+        )
     return StakeholderListResponse(stakeholders=stakeholders)
 
 
@@ -887,23 +1061,22 @@ def get_stakeholder(stakeholder_id: str):
     stakeholder = db.get_stakeholder_by_id(stakeholder_id)
     if not stakeholder:
         raise HTTPException(status_code=404, detail="Stakeholder not found")
-    
-    return StakeholderResponse(stakeholder=Stakeholder(
-        id=stakeholder["id"],
-        type=stakeholder.get("type"),
-        name=stakeholder["name"],
-        contact_info=stakeholder.get("contact_info"),
-        publication_status=stakeholder.get("publication_status", "pending"),
-        created_at=stakeholder["created_at"],
-        updated_at=stakeholder["updated_at"]
-    ))
+
+    return StakeholderResponse(
+        stakeholder=Stakeholder(
+            id=stakeholder["id"],
+            type=stakeholder.get("type"),
+            name=stakeholder["name"],
+            contact_info=stakeholder.get("contact_info"),
+            publication_status=stakeholder.get("publication_status", "pending"),
+            created_at=stakeholder["created_at"],
+            updated_at=stakeholder["updated_at"],
+        )
+    )
 
 
 @app.patch("/stakeholders/{stakeholder_id}/publication-status", response_model=StakeholderResponse)
-def update_stakeholder_publication_status(
-    stakeholder_id: str,
-    request: UpdateStakeholderPublicationStatusRequest
-):
+def update_stakeholder_publication_status(stakeholder_id: str, request: UpdateStakeholderPublicationStatusRequest):
     """Update a stakeholder's publication status"""
     # Validate publication_status value if provided
     if request.publication_status is not None:
@@ -911,30 +1084,30 @@ def update_stakeholder_publication_status(
         if request.publication_status not in valid_statuses:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid publication_status. Must be one of: {', '.join(valid_statuses)}, or null"
+                detail=f"Invalid publication_status. Must be one of: {', '.join(valid_statuses)}, or null",
             )
-    
+
     # Check if stakeholder exists
     stakeholder = db.get_stakeholder_by_id(stakeholder_id)
     if not stakeholder:
         raise HTTPException(status_code=404, detail="Stakeholder not found")
-    
+
     # Update the stakeholder
-    db.update_stakeholder(stakeholder_id, {
-        "publication_status": request.publication_status
-    })
-    
+    db.update_stakeholder(stakeholder_id, {"publication_status": request.publication_status})
+
     # Return updated stakeholder
     updated_stakeholder = db.get_stakeholder_by_id(stakeholder_id)
-    return StakeholderResponse(stakeholder=Stakeholder(
-        id=updated_stakeholder["id"],
-        type=updated_stakeholder.get("type"),
-        name=updated_stakeholder["name"],
-        contact_info=updated_stakeholder.get("contact_info"),
-        publication_status=updated_stakeholder.get("publication_status"),
-        created_at=updated_stakeholder["created_at"],
-        updated_at=updated_stakeholder["updated_at"]
-    ))
+    return StakeholderResponse(
+        stakeholder=Stakeholder(
+            id=updated_stakeholder["id"],
+            type=updated_stakeholder.get("type"),
+            name=updated_stakeholder["name"],
+            contact_info=updated_stakeholder.get("contact_info"),
+            publication_status=updated_stakeholder.get("publication_status"),
+            created_at=updated_stakeholder["created_at"],
+            updated_at=updated_stakeholder["updated_at"],
+        )
+    )
 
 
 # =============================================================================

@@ -1044,3 +1044,37 @@ def set_case_mention_verification(case_id: str, mention_id: str, verified: bool)
             (case_id, mention_id, 1 if verified else 0, now, now, 1 if verified else 0, now),
         )
         connection.commit()
+
+
+def mark_stakeholder_chunks_as_objected(case_id: str, stakeholder_id: str) -> None:
+    """Mark all chunk mentions for a stakeholder in a case as objected (verified=False)."""
+    now = datetime.now().isoformat()
+    with get_connection() as connection:
+        # Get all chunk-stakeholder mentions for this stakeholder in this case
+        cursor = connection.execute(
+            """
+            SELECT DISTINCT cs.id
+            FROM ChunkStakeholders cs
+            JOIN Chunks c ON cs.chunk_id = c.id
+            JOIN CaseDocuments cd ON c.document_id = cd.document_id
+            WHERE cd.case_id = ? AND cs.stakeholder_id = ?
+        """,
+            (case_id, stakeholder_id),
+        )
+
+        mention_ids = [row["id"] for row in cursor.fetchall()]
+
+        # Mark each mention as objected (verified=False) in CaseChunkStakeholderVerification
+        for mention_id in mention_ids:
+            connection.execute(
+                """
+                INSERT INTO CaseChunkStakeholderVerification (case_id, chunk_stakeholder_id, verified, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(case_id, chunk_stakeholder_id) DO UPDATE SET
+                    verified = ?,
+                    updated_at = ?
+            """,
+                (case_id, mention_id, 0, now, now, 0, now),  # verified=0 means objected
+            )
+
+        connection.commit()

@@ -7,6 +7,7 @@ import { StakeholderDetailView } from '@/components/features/StakeholderDetailVi
 import { StakeholderBoard } from '@/components/features/StakeholderBoard';
 import { useCaseStakeholders } from '@/api/stakeholders';
 import { CreateCaseForm } from '@/components/features/CreateCaseForm';
+import { CaseOverview } from '@/components/features/CaseOverview';
 import { useUIStore } from '@/store';
 import { useCaseStep } from '@/hooks/useCaseStep';
 import { apiClient } from '@/api/client';
@@ -101,6 +102,19 @@ export default function CaseDetailPage() {
                         }}
                     />
                 );
+            }
+            return (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                    <div className="text-center">
+                        <p className="text-lg font-medium mb-2">Geen zaak geselecteerd</p>
+                    </div>
+                </div>
+            );
+        }
+
+        if (step === 'overview') {
+            if (id) {
+                return <CaseOverview caseId={id} />;
             }
             return (
                 <div className="flex items-center justify-center h-full text-gray-500">

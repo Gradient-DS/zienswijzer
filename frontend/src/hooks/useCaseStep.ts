@@ -1,11 +1,12 @@
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 
-export type CaseStep = 'create' | 'review' | 'belanghebbenden';
+export type CaseStep = 'create' | 'review' | 'belanghebbenden' | 'overview';
 
 const STEP_NAMES: Record<CaseStep, string> = {
     create: 'Zaak aanmaken',
-    review: 'documenten controleren',
-    belanghebbenden: 'belanghebbenden',
+    review: 'Documenten controleren',
+    belanghebbenden: 'Belanghebbenden',
+    overview: 'Overzicht',
 };
 
 export function useCaseStep() {

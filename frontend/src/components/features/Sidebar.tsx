@@ -127,17 +127,19 @@ export function Sidebar({
                 <div className="flex-1 flex flex-col min-h-0">
                     <div className="flex-shrink-0 flex items-center justify-between p-4 pb-3 border-b border-gray-200 bg-gray-50">
                         <h2 className="text-lg font-semibold">Documenten</h2>
-                        {step === 'review' && selectedCaseId && (
-                            <Button
-                                onClick={handleAddDocument}
-                                variant="outline"
-                                size="sm"
-                                className="flex items-center gap-2"
-                            >
-                                <Plus className="h-4 w-4" />
-                                Toevoegen
-                            </Button>
-                        )}
+                        <Button
+                            onClick={handleAddDocument}
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                                "flex items-center gap-2",
+                                !(step === 'review' && selectedCaseId) && "invisible"
+                            )}
+                            disabled={!(step === 'review' && selectedCaseId)}
+                        >
+                            <Plus className="h-4 w-4" />
+                            Toevoegen
+                        </Button>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 pt-3">
@@ -188,7 +190,8 @@ export function Sidebar({
                         >
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <h1 className="text-md text-gray-900 ml-auto">WOO zienswijze</h1>
+
+                        <h2 className="text-lg pl-2 font-semibold">WOO Zienswijzer</h2>
                     </div>
                     <div className="space-y-1">
                         <Button
