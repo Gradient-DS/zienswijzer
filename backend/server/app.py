@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-#from .utils.text_processor import transform_text
+
+# from .utils.text_processor import transform_text
 from . import db
 from typing import List, Optional
 from datetime import datetime
@@ -156,7 +157,6 @@ class CaseDetail(BaseModel):
 class CreateCaseRequest(BaseModel):
     title: str
     description: str
-    password: Optional[str] = None
 
 
 class CreateCaseResponse(BaseModel):
@@ -254,7 +254,7 @@ def login(request: LoginRequest):
     logger.info(f"User: {user}")
     if not user:
         user = db.get_user_by_email(request.email)
-    
+
     if not user:
         # Create a dummy user for any login attempt
         user = {
@@ -292,15 +292,17 @@ def get_workspaces():
     workspaces = []
     logger.info(f"Workspaces: {workspaces_data}")
     for ws in workspaces_data:
-        workspaces.append(Workspace(
-            id=ws["id"],
-            name=ws["name"],
-            description=ws.get("description", ""),
-            createdAt=ws["created_at"],
-            updatedAt=ws["updated_at"],
-            memberCount=ws["member_count"],
-            isOwner=bool(ws.get("is_owner", 0))
-        ))
+        workspaces.append(
+            Workspace(
+                id=ws["id"],
+                name=ws["name"],
+                description=ws.get("description", ""),
+                createdAt=ws["created_at"],
+                updatedAt=ws["updated_at"],
+                memberCount=ws["member_count"],
+                isOwner=bool(ws.get("is_owner", 0)),
+            )
+        )
     return WorkspaceListResponse(workspaces=workspaces)
 
 
@@ -332,25 +334,27 @@ def get_workspace_detail(workspace_id: str):
     # Get workspace members
     members_data = db.get_workspace_members(workspace_id)
     members = [User(**member) for member in members_data]
-    
+
     # Get all documents (for now, return all documents - in a real app, filter by workspace)
     documents_data = db.get_documents()
     documents = []
     for doc in documents_data:
-        documents.append(Document(
-            id=doc["id"],
-            title=doc["title"],
-            description=doc.get("description"),
-            type=doc.get("type"),
-            filePath=doc.get("file_path"),
-            fileSize=doc.get("file_size"),
-            pageCount=doc.get("page_count"),
-            processingStatus=doc.get("processing_status"),
-            uploadedAt=doc.get("uploaded_at"),
-            processedAt=doc.get("processed_at"),
-            createdAt=doc["created_at"],
-            updatedAt=doc["updated_at"]
-        ))
+        documents.append(
+            Document(
+                id=doc["id"],
+                title=doc["title"],
+                description=doc.get("description"),
+                type=doc.get("type"),
+                filePath=doc.get("file_path"),
+                fileSize=doc.get("file_size"),
+                pageCount=doc.get("page_count"),
+                processingStatus=doc.get("processing_status"),
+                uploadedAt=doc.get("uploaded_at"),
+                processedAt=doc.get("processed_at"),
+                createdAt=doc["created_at"],
+                updatedAt=doc["updated_at"],
+            )
+        )
 
     # Create detailed workspace
     detailed_workspace = WorkspaceDetail(
@@ -362,7 +366,7 @@ def get_workspace_detail(workspace_id: str):
         memberCount=workspace["member_count"],
         isOwner=bool(workspace.get("is_owner", 0)),
         members=members,
-        documents=documents
+        documents=documents,
     )
 
     return WorkspaceDetailResponse(workspace=detailed_workspace)
@@ -376,14 +380,16 @@ def get_cases():
     cases = []
     logger.info(f"Cases: {cases_data}")
     for case in cases_data:
-        cases.append(Case(
-            id=case["id"],
-            title=case["title"],
-            description=case.get("description", ""),
-            documentIds=case["documentIds"],
-            createdAt=case["created_at"],
-            updatedAt=case["updated_at"]
-        ))
+        cases.append(
+            Case(
+                id=case["id"],
+                title=case["title"],
+                description=case.get("description", ""),
+                documentIds=case["documentIds"],
+                createdAt=case["created_at"],
+                updatedAt=case["updated_at"],
+            )
+        )
     return CaseListResponse(cases=cases)
 
 
@@ -400,7 +406,75 @@ def get_case_detail(case_id: str):
     for doc_id in case["documentIds"]:
         doc = db.get_document_by_id(doc_id)
         if doc:
-            case_documents.append(Document(
+            case_documents.append(
+                Document(
+                    id=doc["id"],
+                    title=doc["title"],
+                    description=doc.get("description"),
+                    type=doc.get("type"),
+                    filePath=doc.get("file_path"),
+                    fileSize=doc.get("file_size"),
+                    pageCount=doc.get("page_count"),
+                    processingStatus=doc.get("processing_status"),
+                    uploadedAt=doc.get("uploaded_at"),
+                    processedAt=doc.get("processed_at"),
+                    createdAt=doc["created_at"],
+                    updatedAt=doc["updated_at"],
+                )
+            )
+
+    detailed_case = CaseDetail(
+        id=case["id"],
+        title=case["title"],
+        description=case.get("description", ""),
+        documentIds=case["documentIds"],
+        createdAt=case["created_at"],
+        updatedAt=case["updated_at"],
+        documents=case_documents,
+    )
+
+    return CaseDetailResponse(case=detailed_case)
+
+
+@app.post("/cases", response_model=CreateCaseResponse)
+def create_case(request: CreateCaseRequest):
+    """Create a new case"""
+    logger.info(f"Create case request: {request}")
+    now = datetime.now().isoformat() + "Z"
+
+    new_case = {
+        "id": f"case_{len(db.get_cases()) + 1}",
+        "title": request.title,
+        "description": request.description,
+        "password": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    db.create_case(new_case)
+
+    return_case = {
+        "id": new_case["id"],
+        "title": new_case["title"],
+        "description": new_case["description"],
+        "documentIds": [],
+        "createdAt": new_case["created_at"],
+        "updatedAt": new_case["updated_at"],
+    }
+
+    return CreateCaseResponse(case=Case(**return_case))
+
+
+# Documents routes
+@app.get("/documents")
+def get_documents():
+    """Get all documents"""
+    documents_data = db.get_documents()
+    documents = []
+    logger.info(f"Documents: {documents_data}")
+    for doc in documents_data:
+        documents.append(
+            Document(
                 id=doc["id"],
                 title=doc["title"],
                 description=doc.get("description"),
@@ -412,63 +486,9 @@ def get_case_detail(case_id: str):
                 uploadedAt=doc.get("uploaded_at"),
                 processedAt=doc.get("processed_at"),
                 createdAt=doc["created_at"],
-                updatedAt=doc["updated_at"]
-            ))
-
-    detailed_case = CaseDetail(
-        id=case["id"],
-        title=case["title"],
-        description=case.get("description", ""),
-        documentIds=case["documentIds"],
-        createdAt=case["created_at"],
-        updatedAt=case["updated_at"],
-        documents=case_documents
-    )
-
-    return CaseDetailResponse(case=detailed_case)
-
-
-@app.post("/cases", response_model=CreateCaseResponse)
-def create_case(request: CreateCaseRequest):
-    """Create a new case"""
-    logger.info(f"Create case request: {request}")
-    new_case = {
-        "id": f"case_{len(db.get_cases()) + 1}",
-        "title": request.title,
-        "description": request.description,
-        "documentIds": [],
-        "createdAt": datetime.now().isoformat() + "Z",
-        "updatedAt": datetime.now().isoformat() + "Z",
-        "password": None,
-    }
-
-    db.create_case(new_case)
-
-    return CreateCaseResponse(case=Case(**new_case))
-
-
-# Documents routes
-@app.get("/documents")
-def get_documents():
-    """Get all documents"""
-    documents_data = db.get_documents()
-    documents = []
-    logger.info(f"Documents: {documents_data}")
-    for doc in documents_data:
-        documents.append(Document(
-            id=doc["id"],
-            title=doc["title"],
-            description=doc.get("description"),
-            type=doc.get("type"),
-            filePath=doc.get("file_path"),
-            fileSize=doc.get("file_size"),
-            pageCount=doc.get("page_count"),
-            processingStatus=doc.get("processing_status"),
-            uploadedAt=doc.get("uploaded_at"),
-            processedAt=doc.get("processed_at"),
-            createdAt=doc["created_at"],
-            updatedAt=doc["updated_at"]
-        ))
+                updatedAt=doc["updated_at"],
+            )
+        )
     return {"documents": documents}
 
 
@@ -503,7 +523,7 @@ def get_document_detail(document_id: str):
                             name=stakeholder["name"],
                             contactInfo=stakeholder.get("contact_info", ""),
                             createdAt=stakeholder["created_at"],
-                            updatedAt=stakeholder["updated_at"]
+                            updatedAt=stakeholder["updated_at"],
                         ),
                         confidence=cs["confidence"],
                         mentionText=cs["mention_text"],
@@ -595,7 +615,7 @@ def get_document_chunks(document_id: str):
                             name=stakeholder["name"],
                             contactInfo=stakeholder.get("contact_info", ""),
                             createdAt=stakeholder["created_at"],
-                            updatedAt=stakeholder["updated_at"]
+                            updatedAt=stakeholder["updated_at"],
                         ),
                         confidence=cs["confidence"],
                         mentionText=cs["mention_text"],
@@ -624,9 +644,10 @@ class UploadDocumentResponse(BaseModel):
 
 
 @app.post("/documents/upload", response_model=UploadDocumentResponse)
-async def upload_document(case_id: str, file: UploadFile = File(...)):
+async def upload_document(case_id: str = Query(...), file: UploadFile = File(...)):
     """Upload a PDF document to a case"""
-    logger.info(f"Upload document request: {case_id}, {file.filename}")
+    logger.info(f"Upload document request: case_id={case_id}, filename={file.filename}")
+
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
@@ -638,17 +659,25 @@ async def upload_document(case_id: str, file: UploadFile = File(...)):
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
-    # Create data directory if it doesn't exist
-    data_dir = Path(__file__).parent / "data"
-    data_dir.mkdir(exist_ok=True)
+    # Create data/pdfs directory if it doesn't exist
+    data_dir = Path(__file__).parent / "data" / "pdfs"
+    data_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate unique document ID
     doc_id = f"doc_{uuid.uuid4().hex[:8]}"
 
+    # Generate unique filename to avoid collisions
+    unique_filename = f"{doc_id}_{file.filename}"
+    file_path = data_dir / unique_filename
+
     # Save file
-    file_path = data_dir / f"{doc_id}_{file.filename}"
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        logger.info(f"File saved to: {file_path}")
+    except Exception as e:
+        logger.error(f"Error saving file: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
     # Get file size
     file_size = file_path.stat().st_size
@@ -660,20 +689,35 @@ async def upload_document(case_id: str, file: UploadFile = File(...)):
         "title": file.filename,
         "description": f"Uploaded document: {file.filename}",
         "type": "document",
-        "filePath": str(file_path.relative_to(Path(__file__).parent)),
-        "fileSize": file_size,
-        "pageCount": 1,  # Would need PDF parsing to get actual page count
-        "processingStatus": "completed",
-        "uploadedAt": now,
-        "processedAt": now,
-        "createdAt": now,
-        "updatedAt": now,
+        "file_path": str(file_path.relative_to(Path(__file__).parent)),
+        "file_size": file_size,
+        "page_count": 1,  # Would need PDF parsing to get actual page count
+        "processing_status": "completed",
+        "uploaded_at": now,
+        "processed_at": now,
+        "created_at": now,
+        "updated_at": now,
     }
 
     db.create_document(new_document)
     db.add_document_to_case(case_id, doc_id)
-    
-    return UploadDocumentResponse(document=Document(**new_document))
+
+    return_document = Document(
+        id=new_document["id"],
+        title=new_document["title"],
+        description=new_document["description"],
+        type=new_document["type"],
+        filePath=new_document["file_path"],
+        fileSize=new_document["file_size"],
+        pageCount=new_document["page_count"],
+        processingStatus=new_document["processing_status"],
+        uploadedAt=new_document["uploaded_at"],
+        processedAt=new_document["processed_at"],
+        createdAt=new_document["created_at"],
+        updatedAt=new_document["updated_at"],
+    )
+
+    return UploadDocumentResponse(document=return_document)
 
 
 if __name__ == "__main__":

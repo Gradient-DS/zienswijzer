@@ -29,6 +29,7 @@ export default function App() {
             </Route>
 
             <Route path="/" element={<Navigate to="/home" replace />} />
+            <Route path="/login" element={<Navigate to="/home" replace />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
