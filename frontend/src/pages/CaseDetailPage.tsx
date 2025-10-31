@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useCase } from '@/api/cases';
 import { PDFViewer } from '@/components/features/PDFViewer';
@@ -6,12 +6,43 @@ import { DocumentList } from '@/components/features/DocumentList';
 import { DocumentUpload } from '@/components/features/DocumentUpload';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
+import { useUIStore } from '@/store';
+import { cn } from '@/lib/utils';
 
 export default function CaseDetailPage() {
     const { id } = useParams<{ id: string }>();
     const { data: caseData, isLoading, error, refetch } = useCase(id);
     const [selectedDocumentId, setSelectedDocumentId] = useState<string | undefined>();
     const [showUpload, setShowUpload] = useState(false);
+    const previousCaseIdRef = useRef<string | undefined>(undefined);
+    const { isSidebarOpen } = useUIStore();
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 1024);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    useEffect(() => {
+        const caseIdChanged = previousCaseIdRef.current !== undefined && previousCaseIdRef.current !== id;
+        previousCaseIdRef.current = id;
+
+        if (caseData?.documents && caseData.documents.length > 0) {
+            const firstDocumentId = caseData.documents[0].id;
+            setSelectedDocumentId((currentSelection) => {
+                if (caseIdChanged || !currentSelection || !caseData.documents.find(doc => doc.id === currentSelection)) {
+                    return firstDocumentId;
+                }
+                return currentSelection;
+            });
+        } else {
+            setSelectedDocumentId(undefined);
+        }
+    }, [id, caseData?.documents]);
 
     if (isLoading) {
         return (
@@ -29,8 +60,6 @@ export default function CaseDetailPage() {
         );
     }
 
-    const initialDocument = caseData.documents[0];
-
     const handleUploadComplete = () => {
         setShowUpload(false);
         refetch();
@@ -38,11 +67,24 @@ export default function CaseDetailPage() {
 
     return (
         <div className="h-full flex flex-col">
-            <div className="border-b p-6 bg-white">
-                <div className="space-y-2">
-                    <h1 className="text-3xl font-bold text-gray-900">{caseData.title}</h1>
-                    <p className="text-gray-700">{caseData.description}</p>
-                </div>
+            <div className={cn(
+                "border-b bg-white",
+                isMobile ? "px-4 pb-3 -mt-12" : "px-6 pt-4 pb-3",
+                !isMobile && !isSidebarOpen && "pl-[72px]"
+            )}>
+                {isMobile ? (
+                    <div className="flex items-start gap-4 pl-[56px]">
+                        <div className="flex-1 min-w-0">
+                            <h1 className="text-xl font-bold text-gray-900 truncate leading-tight">{caseData.title}</h1>
+                            <p className="text-sm text-gray-700 truncate mt-1">{caseData.description}</p>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-1">
+                        <h1 className="text-xl font-bold text-gray-900 leading-tight">{caseData.title}</h1>
+                        <p className="text-sm text-gray-700">{caseData.description}</p>
+                    </div>
+                )}
             </div>
 
             <div className="flex-1 flex overflow-hidden">
@@ -71,15 +113,15 @@ export default function CaseDetailPage() {
 
                     <DocumentList
                         documents={caseData.documents}
-                        selectedDocumentId={selectedDocumentId || initialDocument?.id}
+                        selectedDocumentId={selectedDocumentId}
                         onSelectDocument={setSelectedDocumentId}
                     />
                 </div>
 
                 <div className="flex-1 bg-gray-100 overflow-hidden">
-                    {selectedDocumentId || initialDocument ? (
+                    {selectedDocumentId ? (
                         <PDFViewer
-                            documentId={selectedDocumentId || initialDocument.id}
+                            documentId={selectedDocumentId}
                             className="h-full"
                         />
                     ) : (
