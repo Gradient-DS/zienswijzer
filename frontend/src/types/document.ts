@@ -22,7 +22,9 @@ export interface StakeholderMention {
     confidence: number;
     mention_text: string;
     mention_bbox: BoundingBox;
-    verified: boolean;
+    checked: boolean;
+    accepted: boolean | null;
+    rejected: boolean | null;
     created_at: string;
 }
 

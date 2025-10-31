@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from './client';
 import type { Stakeholder, ChunkDetail } from '@/types';
+import { transformChunkDetail } from '@/lib/mention-utils';
 
 interface StakeholderListResponse {
     stakeholders: Stakeholder[];
@@ -39,8 +40,10 @@ export const useStakeholderMentions = (caseId: string | undefined, stakeholderId
 
                 for (const doc of documents) {
                     try {
-                        const chunksRes = await apiClient.get<ChunkListResponse>(`/documents/${doc.id}/chunks`);
-                        const chunks = chunksRes.data.chunks || [];
+                        const chunksRes = await apiClient.get<any>(`/documents/${doc.id}/chunks`, {
+                            params: { case_id: caseId }
+                        });
+                        const chunks = (chunksRes.data.chunks || []).map(transformChunkDetail);
 
                         const filteredChunks = chunks
                             .map(chunk => ({
@@ -81,14 +84,16 @@ export const useStakeholderVerificationStatus = (caseId: string | undefined) => 
 
                 for (const doc of documents) {
                     try {
-                        const chunksRes = await apiClient.get<ChunkListResponse>(`/documents/${doc.id}/chunks`);
-                        const chunks = chunksRes.data.chunks || [];
+                        const chunksRes = await apiClient.get<any>(`/documents/${doc.id}/chunks`, {
+                            params: { case_id: caseId }
+                        });
+                        const chunks = (chunksRes.data.chunks || []).map(transformChunkDetail);
 
                         chunks.forEach(chunk => {
                             chunk.stakeholder_mentions.forEach(mention => {
                                 const current = stakeholderMentions.get(mention.stakeholder_id) || { verified: 0, total: 0 };
                                 current.total += 1;
-                                if (mention.verified) {
+                                if (mention.checked && mention.accepted) {
                                     current.verified += 1;
                                 }
                                 stakeholderMentions.set(mention.stakeholder_id, current);

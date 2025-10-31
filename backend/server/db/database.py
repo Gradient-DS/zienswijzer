@@ -33,29 +33,33 @@ def init_db() -> None:
 def _migrate_database(connection: sqlite3.Connection) -> None:
     """Apply database migrations for existing databases."""
     cursor = connection.cursor()
-    
+
     # Check if publication_status column exists in Stakeholders table
     cursor.execute("PRAGMA table_info(Stakeholders)")
     columns = [row[1] for row in cursor.fetchall()]
-    
+
     if "publication_status" not in columns:
         # Add publication_status column (no default, NULL allowed)
-        cursor.execute("""
+        cursor.execute(
+            """
             ALTER TABLE Stakeholders 
             ADD COLUMN publication_status TEXT
-        """)
+        """
+        )
         connection.commit()
-    
+
     # Check if stakeholder_id column exists in SentEmails table
     cursor.execute("PRAGMA table_info(SentEmails)")
     columns = [row[1] for row in cursor.fetchall()]
-    
+
     if "stakeholder_id" not in columns:
         # Add stakeholder_id column (no default, NULL allowed)
-        cursor.execute("""
+        cursor.execute(
+            """
             ALTER TABLE SentEmails 
             ADD COLUMN stakeholder_id TEXT
-        """)
+        """
+        )
         connection.commit()
 
 
@@ -332,9 +336,26 @@ def add_document_to_case(case_id: str, document_id: str) -> None:
 def update_document(doc_id: str, document: Dict[str, Any]) -> None:
     """Update a document."""
     with get_connection() as connection:
-        connection.execute("""
+        connection.execute(
+            """
             UPDATE Documents SET title = ?, description = ?, type = ?, keywords = ?, author = ?, file_path = ?, markdown_path = ?, file_size = ?, page_count = ?, parse_status = ?, created_at = ?, updated_at = ? WHERE id = ?
-        """, (document["title"], document["description"], document["type"], document["keywords"], document["author"], document["file_path"], document["markdown_path"], document["file_size"], document["page_count"], document["parse_status"], document["created_at"], document["updated_at"], doc_id))
+        """,
+            (
+                document["title"],
+                document["description"],
+                document["type"],
+                document["keywords"],
+                document["author"],
+                document["file_path"],
+                document["markdown_path"],
+                document["file_size"],
+                document["page_count"],
+                document["parse_status"],
+                document["created_at"],
+                document["updated_at"],
+                doc_id,
+            ),
+        )
         connection.commit()
 
 
@@ -438,13 +459,24 @@ def get_stakeholder_by_id(stakeholder_id: str) -> Optional[Dict[str, Any]]:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+
 def create_stakeholder(stakeholder: Dict[str, Any]) -> None:
     """Create a new stakeholder."""
     with get_connection() as connection:
-        connection.execute("""
+        connection.execute(
+            """
             INSERT INTO Stakeholders (id, type, name, contact_info, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (stakeholder["id"], stakeholder["type"], stakeholder["name"], stakeholder["contact_info"], stakeholder["created_at"], stakeholder["updated_at"]))
+        """,
+            (
+                stakeholder["id"],
+                stakeholder["type"],
+                stakeholder["name"],
+                stakeholder["contact_info"],
+                stakeholder["created_at"],
+                stakeholder["updated_at"],
+            ),
+        )
         connection.commit()
 
 
@@ -474,20 +506,20 @@ def update_stakeholder(stakeholder_id: str, updates: Dict[str, Any]) -> None:
     allowed_fields = ["type", "name", "contact_info", "publication_status"]
     update_fields = []
     values = []
-    
+
     for field in allowed_fields:
         if field in updates:
             update_fields.append(f"{field} = ?")
             values.append(updates[field])
-    
+
     if not update_fields:
         return  # No fields to update
-    
+
     # Always update updated_at
     update_fields.append("updated_at = ?")
     values.append(datetime.now().isoformat())
     values.append(stakeholder_id)
-    
+
     with get_connection() as connection:
         query = f"UPDATE Stakeholders SET {', '.join(update_fields)} WHERE id = ?"
         connection.execute(query, values)
@@ -499,27 +531,49 @@ def update_stakeholder(stakeholder_id: str, updates: Dict[str, Any]) -> None:
 # ---------------------
 
 
-def get_chunk_stakeholders(chunk_id: str) -> List[Dict[str, Any]]:
-    """Get all stakeholder mentions for a chunk."""
+def get_chunk_stakeholders(chunk_id: str, case_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Get all stakeholder mentions for a chunk, optionally with per-case verification status."""
     with get_connection() as connection:
-        cursor = connection.execute(
-            """
-            SELECT cs.id, cs.chunk_id, cs.stakeholder_id, cs.confidence, cs.mention_text,
-                   cs.mention_bbox, cs.verified, cs.created_at,
-                   s.type, s.name, s.contact_info, s.publication_status
-            FROM ChunkStakeholders cs
-            JOIN Stakeholders s ON cs.stakeholder_id = s.id
-            WHERE cs.chunk_id = ?
-            ORDER BY cs.confidence DESC
-        """,
-            (chunk_id,),
-        )
+        if case_id:
+            cursor = connection.execute(
+                """
+                SELECT cs.id, cs.chunk_id, cs.stakeholder_id, cs.confidence, cs.mention_text,
+                       cs.mention_bbox, ccsv.verified as verified, cs.created_at,
+                       s.type, s.name, s.contact_info
+                FROM ChunkStakeholders cs
+                JOIN Stakeholders s ON cs.stakeholder_id = s.id
+                LEFT JOIN CaseChunkStakeholderVerification ccsv 
+                    ON ccsv.chunk_stakeholder_id = cs.id AND ccsv.case_id = ?
+                WHERE cs.chunk_id = ?
+                ORDER BY cs.confidence DESC
+            """,
+                (case_id, chunk_id),
+            )
+        else:
+            cursor = connection.execute(
+                """
+                SELECT cs.id, cs.chunk_id, cs.stakeholder_id, cs.confidence, cs.mention_text,
+                       cs.mention_bbox, cs.verified, cs.created_at,
+                       s.type, s.name, s.contact_info
+                FROM ChunkStakeholders cs
+                JOIN Stakeholders s ON cs.stakeholder_id = s.id
+                WHERE cs.chunk_id = ?
+                ORDER BY cs.confidence DESC
+            """,
+                (chunk_id,),
+            )
 
         mentions = []
         for row in cursor.fetchall():
             mention = dict(row)
             mention["mention_bbox"] = json.loads(mention["mention_bbox"])
-            mention["verified"] = bool(mention["verified"])
+            if case_id:
+                if mention["verified"] is not None:
+                    mention["verified"] = bool(mention["verified"])
+                else:
+                    mention["verified"] = None
+            else:
+                mention["verified"] = bool(mention["verified"])
             mentions.append(mention)
 
         return mentions
@@ -946,7 +1000,7 @@ def get_chunk_stakeholders_by_id(mention_id: str) -> Optional[Dict[str, Any]]:
 
 
 def update_chunk_stakeholder_verified(mention_id: str, verified: bool) -> None:
-    """Update the verification status of a chunk stakeholder mention."""
+    """Update the verification status of a chunk stakeholder mention (deprecated - use per-case verification)."""
     with get_connection() as connection:
         connection.execute(
             """
@@ -955,5 +1009,38 @@ def update_chunk_stakeholder_verified(mention_id: str, verified: bool) -> None:
             WHERE id = ?
         """,
             (1 if verified else 0, mention_id),
+        )
+        connection.commit()
+
+
+def get_case_mention_verification(case_id: str, mention_id: str) -> Optional[bool]:
+    """Get verification status for a mention in a specific case."""
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            SELECT verified FROM CaseChunkStakeholderVerification
+            WHERE case_id = ? AND chunk_stakeholder_id = ?
+        """,
+            (case_id, mention_id),
+        )
+        row = cursor.fetchone()
+        if row:
+            return bool(row["verified"])
+        return None
+
+
+def set_case_mention_verification(case_id: str, mention_id: str, verified: bool) -> None:
+    """Set verification status for a mention in a specific case."""
+    now = datetime.now().isoformat()
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO CaseChunkStakeholderVerification (case_id, chunk_stakeholder_id, verified, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(case_id, chunk_stakeholder_id) DO UPDATE SET
+                verified = ?,
+                updated_at = ?
+        """,
+            (case_id, mention_id, 1 if verified else 0, now, now, 1 if verified else 0, now),
         )
         connection.commit()
