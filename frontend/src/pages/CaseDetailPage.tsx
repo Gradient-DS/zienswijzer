@@ -39,24 +39,26 @@ export default function CaseDetailPage() {
     return (
         <div className="h-full flex flex-col">
             <div className="border-b p-6 bg-white">
-                <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                        <h1 className="text-3xl font-bold text-gray-900">{caseData.title}</h1>
-                        <p className="text-gray-700">{caseData.description}</p>
-                    </div>
-                    <Button
-                        onClick={() => setShowUpload(!showUpload)}
-                        className="flex items-center gap-2"
-                    >
-                        <Plus className="h-4 w-4" />
-                        Document toevoegen
-                    </Button>
+                <div className="space-y-2">
+                    <h1 className="text-3xl font-bold text-gray-900">{caseData.title}</h1>
+                    <p className="text-gray-700">{caseData.description}</p>
                 </div>
             </div>
 
             <div className="flex-1 flex overflow-hidden">
                 <div className="w-80 border-r bg-white overflow-y-auto p-4">
-                    <h2 className="text-lg font-semibold mb-4">Documenten</h2>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-semibold">Documenten</h2>
+                        <Button
+                            onClick={() => setShowUpload(!showUpload)}
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center gap-2"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Toevoegen
+                        </Button>
+                    </div>
 
                     {showUpload && (
                         <div className="mb-6">
