@@ -35,6 +35,15 @@ from .database import (
     get_oauth_token,
     save_oauth_token,
     delete_oauth_token,
+    # Sent Email functions
+    save_sent_email,
+    get_sent_emails,
+    get_sent_email_by_id,
+    get_sent_email_by_conversation_id,
+    # Email Reply functions
+    save_email_reply,
+    get_email_replies,
+    get_email_reply_by_outlook_id,
 )
 
 __all__ = [
@@ -72,4 +81,13 @@ __all__ = [
     "get_oauth_token",
     "save_oauth_token",
     "delete_oauth_token",
+    # Sent Email functions
+    "save_sent_email",
+    "get_sent_emails",
+    "get_sent_email_by_id",
+    "get_sent_email_by_conversation_id",
+    # Email Reply functions
+    "save_email_reply",
+    "get_email_replies",
+    "get_email_reply_by_outlook_id",
 ]
