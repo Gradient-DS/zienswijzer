@@ -88,7 +88,7 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
         if (!document?.chunks) return;
 
         const chunkWithMention = document.chunks.find((c) =>
-            c.stakeholderMentions.some((m) => m.id === mention.id)
+            c.stakeholder_mentions.some((m) => m.id === mention.id)
         );
 
         if (chunkWithMention) {
@@ -109,7 +109,7 @@ export function PDFViewer({ documentId, className }: PDFViewerProps) {
             const pageDim = pageDimensions.get(targetPage);
             if (!pageDim) return;
 
-            const bbox = mention.mentionBbox;
+            const bbox = mention.mention_bbox;
             const scaledY = bbox.y * scale;
             const scaledHeight = bbox.height * scale;
 

@@ -8,4 +8,3 @@ using the Microsoft Graph API.
 from .email import email_router
 
 __all__ = ["email_router"]
-

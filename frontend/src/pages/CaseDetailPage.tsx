@@ -36,7 +36,7 @@ export default function CaseDetailPage() {
     useEffect(() => {
         if (step === 'review' && id && caseData?.documents && caseData.documents.length > 0 && !selectedDocumentId) {
             const firstUncompletedDocument = caseData.documents.find(
-                doc => doc.processingStatus !== 'completed' && doc.processingStatus !== 'failed'
+                doc => doc.parse_status !== 'completed' && doc.parse_status !== 'failed'
             ) || caseData.documents[0];
 
             if (hasAutoSelectedRef.current !== id) {

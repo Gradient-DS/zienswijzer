@@ -45,11 +45,11 @@ export const useStakeholderMentions = (caseId: string | undefined, stakeholderId
                         const filteredChunks = chunks
                             .map(chunk => ({
                                 ...chunk,
-                                stakeholderMentions: chunk.stakeholderMentions.filter(
-                                    mention => mention.stakeholderId === stakeholderId
+                                stakeholder_mentions: chunk.stakeholder_mentions.filter(
+                                    mention => mention.stakeholder_id === stakeholderId
                                 )
                             }))
-                            .filter(chunk => chunk.stakeholderMentions.length > 0);
+                            .filter(chunk => chunk.stakeholder_mentions.length > 0);
 
                         allChunks.push(...filteredChunks);
                     } catch (error) {

@@ -15,9 +15,9 @@ import {
 export default function HomePage() {
     const location = useLocation();
     const navigate = useNavigate();
-    const caseIdMatch = location.pathname.match(/\/cases\/(.+)/);
-    const selectedCaseId = caseIdMatch ? caseIdMatch[1] : undefined;
     const isNewCase = location.pathname === '/cases/new';
+    const caseIdMatch = location.pathname.match(/\/cases\/(.+)/);
+    const selectedCaseId = isNewCase ? undefined : (caseIdMatch ? caseIdMatch[1] : undefined);
     const searchParams = new URLSearchParams(location.search);
     const selectedDocumentId = searchParams.get('document') || undefined;
     const { data: caseData } = useCase(selectedCaseId);

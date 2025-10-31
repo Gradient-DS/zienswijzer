@@ -33,7 +33,7 @@ function groupCasesByDate(cases: Case[]) {
     const groups: Record<string, Case[]> = {};
 
     cases.forEach((caseItem) => {
-        const groupKey = formatDateGroup(caseItem.createdAt);
+        const groupKey = formatDateGroup(caseItem.created_at);
         if (!groups[groupKey]) {
             groups[groupKey] = [];
         }

@@ -63,7 +63,7 @@ function ChunkCard({
     return (
         <Card
             className="cursor-pointer hover:shadow-md transition-all border-2"
-            onClick={() => onNavigateToDocument(chunk.documentId, chunk.page)}
+            onClick={() => onNavigateToDocument(chunk.document_id, chunk.page)}
         >
             <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
@@ -97,7 +97,7 @@ function ChunkCard({
                         Vermelding:
                     </p>
                     <p className="text-sm text-gray-800 bg-gray-50 p-2 rounded border border-gray-200 italic">
-                        "{mention.mentionText}"
+                        "{mention.mention_text}"
                     </p>
                 </div>
                 <div>
@@ -140,7 +140,7 @@ export function StakeholderDetailView({
         const verified: Array<{ chunk: ChunkDetail; mention: StakeholderMention }> = [];
 
         chunks.forEach(chunk => {
-            chunk.stakeholderMentions.forEach(mention => {
+            chunk.stakeholder_mentions.forEach(mention => {
                 if (!mention.verified) {
                     unverified.push({ chunk, mention });
                 } else {
@@ -199,9 +199,9 @@ export function StakeholderDetailView({
                     <span className="px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700 capitalize">
                         {stakeholder.type}
                     </span>
-                    {stakeholder.contactInfo && (
+                    {stakeholder.contact_info && (
                         <span className="text-sm text-gray-600">
-                            {stakeholder.contactInfo}
+                            {stakeholder.contact_info}
                         </span>
                     )}
                 </div>
@@ -217,7 +217,7 @@ export function StakeholderDetailView({
                     </div>
                     <div className="space-y-3">
                         {unverifiedChunks.map(({ chunk, mention }) => {
-                            const document = documentMap.get(chunk.documentId);
+                            const document = documentMap.get(chunk.document_id);
                             return (
                                 <ChunkCard
                                     key={`${chunk.id}-${mention.id}`}
@@ -242,7 +242,7 @@ export function StakeholderDetailView({
                     </div>
                     <div className="space-y-3">
                         {verifiedChunks.map(({ chunk, mention }) => {
-                            const document = documentMap.get(chunk.documentId);
+                            const document = documentMap.get(chunk.document_id);
                             return (
                                 <ChunkCard
                                     key={`${chunk.id}-${mention.id}`}
