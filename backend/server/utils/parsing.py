@@ -95,14 +95,22 @@ def main(doc_id: str):
     document = db.get_document_by_id(doc_id)
     if not document:
         raise ValueError(f"Document not found: {doc_id}")
+<<<<<<< HEAD
 
     # Resolve file path relative to server directory
     server_dir = Path(__file__).parent.parent
     INPUT_PATH = server_dir / document["file_path"]
 
     logger.info(f"Parsing document: {INPUT_PATH}")
+=======
+    
+    INPUT_PATH = Path(__file__).parent.parent / document['file_path']
+    
+    logger.info(f"Parsing document")
+>>>>>>> origin/main
     parser = PDFParser()
-    results = parser.parse(blob=parser.load_pdf(INPUT_PATH), verbose=True)
+    blob = parser.load_pdf(INPUT_PATH)
+    results = parser.parse(blob=blob, verbose=True)
 
     document["title"] = results[0].metadata["title"]
     document["page_count"] = results[0].metadata["total_pages"]
