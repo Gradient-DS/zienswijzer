@@ -740,8 +740,28 @@ async def upload_document(case_id: str, file: UploadFile = File(...)):
 # =============================================================================
 
 from server.email import email_router
+from server.reply_classification import classification_router
 
 app.include_router(email_router)
+
+# =============================================================================
+# REPLY CLASSIFICATION
+# =============================================================================
+# Sentiment classification for stakeholder responses using zero-shot NLP
+# Determines whether responses agree to or object to publication
+#
+# Available endpoints:
+#   - POST /classification/classify  - Classify text sentiment
+#   - GET  /classification/health    - Check service status
+#
+# Model:
+#   - cross-encoder/nli-deberta-v3-small (zero-shot classification)
+#   - Candidate labels: "agrees to publish", "objects to publication"
+#
+# See backend/server/reply_classification/README.md for detailed documentation
+# =============================================================================
+
+app.include_router(classification_router)
 
 
 if __name__ == "__main__":
