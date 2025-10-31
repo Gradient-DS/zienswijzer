@@ -1,5 +1,5 @@
 import type { Document } from '@/types';
-import { FileText, CheckCircle2 } from 'lucide-react';
+import { FileText, Check } from 'lucide-react';
 import { useDocumentCompletionStatus } from '@/api/cases';
 import { cn } from '@/lib/utils';
 
@@ -59,7 +59,7 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument, 
                                     {document.title}
                                 </div>
                                 {allChecked && (
-                                    <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                                    <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
                                 )}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">

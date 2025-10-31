@@ -5,7 +5,6 @@ import { useStakeholderEmails } from '@/api/email';
 import { getStakeholderStatus } from '@/lib/stakeholder-status';
 import type { StakeholderStatus } from '@/lib/stakeholder-status';
 import type { Stakeholder } from '@/types';
-import { Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATUS_COLUMNS } from './StakeholderBoard';
 
@@ -69,7 +68,6 @@ export function StakeholderBoardItem({
         >
             <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                    <Users className={cn('h-4 w-4 flex-shrink-0 mt-0.5', statusColumn?.color)} />
                     <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-sm text-gray-900 truncate">
                             {stakeholder.name}

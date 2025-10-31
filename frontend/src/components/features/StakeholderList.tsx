@@ -1,5 +1,5 @@
 import type { Stakeholder } from '@/types';
-import { Users, CheckCircle2, FileText, Clock } from 'lucide-react';
+import { Users, Check, FileText, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStakeholderMentions } from '@/api/stakeholders';
 import { useStakeholderEmails } from '@/api/email';
@@ -26,7 +26,7 @@ function StatusIcon({ status }: { status: StakeholderStatus }) {
         case 'contacted_old':
             return <Clock className="h-4 w-4 text-orange-600 flex-shrink-0 mt-0.5" />;
         case 'responded':
-            return <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />;
+            return <Check className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />;
         default:
             return <FileText className="h-4 w-4 text-gray-500 flex-shrink-0 mt-0.5" />;
     }

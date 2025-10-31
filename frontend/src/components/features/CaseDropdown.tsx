@@ -68,11 +68,11 @@ export function CaseDropdown({ selectedCaseId, onCaseSelect }: CaseDropdownProps
             <DropdownMenuTrigger asChild>
                 <Button
                     variant="ghost"
-                    className="w-full justify-between gap-2 h-8 pl-2"
+                    className="w-full justify-between gap-2 h-8 pl-2 data-[state=open]:bg-accent data-[state=open]:text-accent-foreground"
                 >
                     <span className="flex-1 text-left truncate flex items-center gap-2">
                         {selectedCase && (
-                            <Briefcase className="h-4 w-4 flex-shrink-0 text-gray-600" />
+                            <Briefcase className="h-4 w-4 flex-shrink-0" />
                         )}
                         {selectedCase ? selectedCase.title : 'Selecteer zaak'}
                     </span>

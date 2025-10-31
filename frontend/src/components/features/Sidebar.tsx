@@ -8,6 +8,7 @@ import { DocumentList } from './DocumentList';
 import { StakeholderList } from './StakeholderList';
 import { useCaseStakeholders, useStakeholderVerificationStatus } from '@/api/stakeholders';
 import { useCaseStep } from '@/hooks/useCaseStep';
+import { cn } from '@/lib/utils';
 import type { Document } from '@/types';
 import {
     Bell,
@@ -16,6 +17,7 @@ import {
     Settings,
     LogOut,
     ChevronLeft,
+    LayoutGrid,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -84,14 +86,20 @@ export function Sidebar({
                 navigate(`${location.pathname}?${newSearchParams.toString()}`, { replace: true });
             };
 
+            const isOverview = !selectedStakeholderId;
+
             return (
                 <div className="flex-1 flex flex-col min-h-0">
                     <div className="flex-shrink-0 p-4 pb-3 border-b border-gray-200 bg-gray-50">
                         <Button
                             variant="ghost"
-                            className="w-full justify-start h-auto p-0 font-semibold text-lg hover:bg-transparent"
+                            className={cn(
+                                "w-full justify-start gap-2 h-8 pl-2",
+                                isOverview && "bg-accent text-accent-foreground"
+                            )}
                             onClick={handleOverviewClick}
                         >
+                            <LayoutGrid className="h-4 w-4" />
                             Overzicht
                         </Button>
                     </div>
