@@ -2,7 +2,6 @@ import { useMemo, useEffect, useRef, useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { X, Trash2, ArrowDown, ArrowUp, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { useVerifyMention, useRemoveMention, useBulkAcceptMentions } from '@/api/verification';
@@ -135,7 +134,7 @@ export function ChunkStakeholderSidebar({
     const location = useLocation();
     const resolvedCaseId = caseId || location.pathname.match(/\/cases\/([^/]+)/)?.[1];
     const { data: documentCompletionStatus } = useDocumentCompletionStatus(resolvedCaseId);
-    const [bulkThreshold, setBulkThreshold] = useState(70);
+    const [bulkThreshold, setBulkThreshold] = useState(80);
     const [isBulkAccepting, setIsBulkAccepting] = useState(false);
 
     const allMentions = useMemo(() => {
@@ -350,15 +349,6 @@ export function ChunkStakeholderSidebar({
         }
 
         const mentionIds = mentionsToAccept.map(({ mention }) => mention.id);
-        const count = mentionIds.length;
-
-        // Confirm for large operations
-        if (count > 50) {
-            const confirmed = window.confirm(
-                `Je staat op het punt om ${count} vermeldingen in alle documenten te accepteren. Doorgaan?`
-            );
-            if (!confirmed) return;
-        }
 
         setIsBulkAccepting(true);
         try {
@@ -596,35 +586,40 @@ export function ChunkStakeholderSidebar({
 
                         {uncheckedMentions.length > 0 ? (
                             resolvedCaseId && (
-                                <div className="flex items-center gap-2">
-                                    <Label htmlFor="bulk-threshold" className="text-xs font-medium text-gray-700 whitespace-nowrap">
-                                        Accepteer boven:
-                                    </Label>
-                                    <Input
-                                        id="bulk-threshold"
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        value={bulkThreshold}
-                                        onChange={(e) => setBulkThreshold(Number(e.target.value))}
-                                        className="h-7 w-20 text-xs pr-3 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-                                        onClick={(e) => e.stopPropagation()}
-                                    />
-                                    <span className="text-xs text-gray-600">%</span>
-                                    <Button
-                                        variant="default"
-                                        size="sm"
-                                        onClick={handleBulkAccept}
-                                        disabled={isBulkAccepting}
-                                        className="h-7 w-7 p-0 flex-shrink-0"
-                                        title={`Accepteer alle vermeldingen boven ${bulkThreshold}% in dit document`}
-                                    >
-                                        {isBulkAccepting ? (
-                                            <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                                        ) : (
-                                            <Check className="h-4 w-4" />
-                                        )}
-                                    </Button>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="bulk-threshold" className="text-xs font-medium text-gray-700">
+                                            Accepteer boven:
+                                        </Label>
+                                        <span className="text-xs font-semibold text-gray-900">{bulkThreshold}%</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            id="bulk-threshold"
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            step="10"
+                                            value={bulkThreshold}
+                                            onChange={(e) => setBulkThreshold(Number(e.target.value))}
+                                            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                        <Button
+                                            variant="default"
+                                            size="sm"
+                                            onClick={handleBulkAccept}
+                                            disabled={isBulkAccepting}
+                                            className="h-7 w-7 p-0 flex-shrink-0"
+                                            title={`Accepteer alle vermeldingen boven ${bulkThreshold}% in dit document`}
+                                        >
+                                            {isBulkAccepting ? (
+                                                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                            ) : (
+                                                <Check className="h-4 w-4" />
+                                            )}
+                                        </Button>
+                                    </div>
                                 </div>
                             )
                         ) : (
