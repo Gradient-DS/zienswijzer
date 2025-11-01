@@ -22,7 +22,7 @@ function getHighlightStyle(mention: StakeholderMention, isSelected: boolean) {
     if (mention.accepted) {
         return {
             stroke: COLORS.accepted,
-            fill: `${COLORS.accepted}CC`, // 80% opacity (CC in hex)
+            fill: `${COLORS.accepted}22`, // 80% opacity (CC in hex)
             strokeDasharray: '0',
             strokeWidth: 2,
         };
@@ -32,7 +32,7 @@ function getHighlightStyle(mention: StakeholderMention, isSelected: boolean) {
     if (mention.rejected) {
         return {
             stroke: COLORS.rejected,
-            fill: `${COLORS.rejected}CC`, // 80% opacity (CC in hex)
+            fill: `${COLORS.rejected}22`, // 80% opacity (CC in hex)
             strokeDasharray: '0',
             strokeWidth: 2,
         };
@@ -106,20 +106,6 @@ export function PDFHighlightOverlay({
         }))
     );
 
-    // Debug: log individual mention coordinates (remove in production)
-    if (import.meta.env.DEV && allMentions.length > 0) {
-        console.log(`[PDFHighlightOverlay] Page ${currentPage} - Mentions (${allMentions.length}):`);
-        allMentions.forEach((mention, idx) => {
-            console.log(
-                `  [${idx}] Mention ID: ${mention.id.substring(0, 8)}... | ` +
-                `Chunk Page: ${mention.chunkPage} | ` +
-                `Original bbox: (x:${mention.mention_bbox.x.toFixed(1)}, y:${mention.mention_bbox.y.toFixed(1)}, ` +
-                `w:${mention.mention_bbox.width.toFixed(1)}, h:${mention.mention_bbox.height.toFixed(1)}) | ` +
-                `Transformed: (x:${mention.transformedBbox.x.toFixed(1)}, y:${mention.transformedBbox.y.toFixed(1)}, ` +
-                `w:${mention.transformedBbox.width.toFixed(1)}, h:${mention.transformedBbox.height.toFixed(1)})`
-            );
-        });
-    }
 
     const scaledWidth = pageWidth * scale;
     const scaledHeight = pageHeight * scale;

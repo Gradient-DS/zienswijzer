@@ -1,6 +1,6 @@
 import type { Document } from '@/types';
-import { FileText, Check } from 'lucide-react';
-import { useDocumentCompletionStatus } from '@/api/cases';
+import { FileText, Check, Loader2 } from 'lucide-react';
+import { useDocumentCompletionStatus, useDocumentProcessingStatus } from '@/api/cases';
 import { cn } from '@/lib/utils';
 
 interface DocumentListProps {
@@ -13,6 +13,8 @@ interface DocumentListProps {
 
 export function DocumentList({ documents, selectedDocumentId, onSelectDocument, disabled = false, caseId }: DocumentListProps) {
     const { data: completionStatus } = useDocumentCompletionStatus(caseId);
+    const { data: processingStatus } = useDocumentProcessingStatus(caseId);
+
     if (documents.length === 0) {
         return (
             <div className="text-center py-8 text-muted-foreground">
@@ -21,21 +23,23 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument, 
         );
     }
 
-    const isAllMentionsChecked = (document: Document): boolean => {
-        if (!document.chunks || document.chunks.length === 0) {
-            return false;
-        }
-        const allMentions = document.chunks.flatMap(chunk => chunk.stakeholder_mentions);
-        if (allMentions.length === 0) {
-            return false;
-        }
-        return allMentions.every(mention => mention.checked);
-    };
-
     return (
         <div className="space-y-1">
             {documents.map((document) => {
-                const allChecked = isAllMentionsChecked(document) || (completionStatus?.get(document.id) ?? false);
+                const allChecked = completionStatus?.get(document.id) ?? false;
+                const isProcessing = processingStatus?.get(document.id) ?? true;
+
+                // Debug logging
+                if (import.meta.env.DEV && isProcessing) {
+                    console.log('[DocumentList] Document still processing:', {
+                        id: document.id.substring(0, 8),
+                        parse_status: document.parse_status,
+                        page_count: document.page_count,
+                        isProcessing: isProcessing,
+                        processingStatus: processingStatus?.get(document.id)
+                    });
+                }
+
                 return (
                     <div
                         key={document.id}
@@ -52,32 +56,31 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument, 
                         )}
                         onClick={() => !disabled && onSelectDocument(document.id)}
                     >
-                        <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        {isProcessing ? (
+                            <Loader2 className="h-4 w-4 text-muted-foreground flex-shrink-0 animate-spin" />
+                        ) : (
+                            <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        )}
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                                 <div className="text-sm font-medium truncate">
                                     {document.title}
                                 </div>
-                                {allChecked && (
+                                {allChecked && !isProcessing && (
                                     <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
                                 )}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
-                                {document.page_count && (
-                                    <span className="text-xs text-muted-foreground">
-                                        {document.page_count} pagina{document.page_count !== 1 ? "'s" : ''}
+                                {isProcessing ? (
+                                    <span className="text-xs text-yellow-700 font-medium animate-pulse">
+                                        Verwerken...
                                     </span>
-                                )}
-                                {document.parse_status && (
-                                    <span className={cn(
-                                        'px-1.5 py-0.5 rounded text-xs font-medium',
-                                        document.parse_status === 'completed' && 'bg-green-100 text-green-800',
-                                        document.parse_status === 'processing' && 'bg-yellow-100 text-yellow-800',
-                                        document.parse_status === 'pending' && 'bg-gray-100 text-gray-800',
-                                        document.parse_status === 'failed' && 'bg-red-100 text-red-800'
-                                    )}>
-                                        {document.parse_status}
-                                    </span>
+                                ) : (
+                                    document.page_count && document.page_count > 0 && (
+                                        <span className="text-xs text-muted-foreground">
+                                            {document.page_count} pagina{document.page_count !== 1 ? "'s" : ''}
+                                        </span>
+                                    )
                                 )}
                             </div>
                         </div>
