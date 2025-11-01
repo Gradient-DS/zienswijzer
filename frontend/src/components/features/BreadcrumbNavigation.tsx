@@ -9,7 +9,7 @@ interface BreadcrumbNavigationProps {
 export function BreadcrumbNavigation({ caseId }: BreadcrumbNavigationProps) {
     const { step, setStep, STEP_NAMES } = useCaseStep();
 
-    const steps: CaseStep[] = ['create', 'review', 'belanghebbenden'];
+    const steps: CaseStep[] = ['create', 'review', 'belanghebbenden', 'overview'];
 
     const handleStepClick = (stepKey: CaseStep) => {
         if (stepKey === 'review' && !caseId) {
@@ -23,7 +23,7 @@ export function BreadcrumbNavigation({ caseId }: BreadcrumbNavigationProps) {
 
     const isStepEnabled = (stepKey: CaseStep): boolean => {
         if (stepKey === 'create') return true;
-        if (stepKey === 'review' || stepKey === 'belanghebbenden') return !!caseId;
+        if (stepKey === 'review' || stepKey === 'belanghebbenden' || stepKey === 'overview') return !!caseId;
         return false;
     };
 

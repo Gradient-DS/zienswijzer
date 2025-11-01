@@ -8,6 +8,7 @@ import { DocumentList } from './DocumentList';
 import { StakeholderList } from './StakeholderList';
 import { useCaseStakeholders, useStakeholderVerificationStatus } from '@/api/stakeholders';
 import { useCaseStep } from '@/hooks/useCaseStep';
+import { cn } from '@/lib/utils';
 import type { Document } from '@/types';
 import {
     Bell,
@@ -16,6 +17,7 @@ import {
     Settings,
     LogOut,
     ChevronLeft,
+    LayoutGrid,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -84,14 +86,20 @@ export function Sidebar({
                 navigate(`${location.pathname}?${newSearchParams.toString()}`, { replace: true });
             };
 
+            const isOverview = !selectedStakeholderId;
+
             return (
                 <div className="flex-1 flex flex-col min-h-0">
                     <div className="flex-shrink-0 p-4 pb-3 border-b border-gray-200 bg-gray-50">
                         <Button
                             variant="ghost"
-                            className="w-full justify-start h-auto p-0 font-semibold text-lg hover:bg-transparent"
+                            className={cn(
+                                "w-full justify-start gap-2 h-8 pl-2",
+                                isOverview && "bg-accent text-accent-foreground"
+                            )}
                             onClick={handleOverviewClick}
                         >
+                            <LayoutGrid className="h-4 w-4" />
                             Overzicht
                         </Button>
                     </div>
@@ -119,17 +127,19 @@ export function Sidebar({
                 <div className="flex-1 flex flex-col min-h-0">
                     <div className="flex-shrink-0 flex items-center justify-between p-4 pb-3 border-b border-gray-200 bg-gray-50">
                         <h2 className="text-lg font-semibold">Documenten</h2>
-                        {step === 'review' && selectedCaseId && (
-                            <Button
-                                onClick={handleAddDocument}
-                                variant="outline"
-                                size="sm"
-                                className="flex items-center gap-2"
-                            >
-                                <Plus className="h-4 w-4" />
-                                Toevoegen
-                            </Button>
-                        )}
+                        <Button
+                            onClick={handleAddDocument}
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                                "flex items-center gap-2",
+                                !(step === 'review' && selectedCaseId) && "invisible"
+                            )}
+                            disabled={!(step === 'review' && selectedCaseId)}
+                        >
+                            <Plus className="h-4 w-4" />
+                            Toevoegen
+                        </Button>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 pt-3">
@@ -180,7 +190,8 @@ export function Sidebar({
                         >
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <h1 className="text-md text-gray-900 ml-auto">WOO zienswijze</h1>
+
+                        <h2 className="text-lg pl-2 font-semibold">WOO Zienswijzer</h2>
                     </div>
                     <div className="space-y-1">
                         <Button

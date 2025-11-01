@@ -34,6 +34,7 @@ from ..db.database import (
     get_chunk_stakeholders,
     get_document_by_id,
     update_stakeholder,
+    mark_stakeholder_chunks_as_objected,
 )
 from ..reply_classification.classification import get_classifier, CANDIDATE_LABELS
 
@@ -47,72 +48,75 @@ email_router = APIRouter(prefix="/email", tags=["email"])
 def extract_reply_text(email_body: str) -> str:
     """
     Extract only the new reply text from an email, removing quoted original message.
-    
+
     Args:
         email_body: Full email body including quoted text
-        
+
     Returns:
         Only the new reply text
     """
     import re
-    
+
     # Strip HTML tags first
-    clean_text = re.sub(r'<[^>]+>', '', email_body)
+    clean_text = re.sub(r"<[^>]+>", "", email_body)
     # Normalize whitespace but keep structure
-    clean_text = re.sub(r'&nbsp;', ' ', clean_text)
+    clean_text = re.sub(r"&nbsp;", " ", clean_text)
     clean_text = clean_text.strip()
-    
+
     # Common patterns that indicate the start of quoted/original message
     quote_patterns = [
-        r'[-_]{3,}.*?Original Message.*?[-_]{3,}',  # -----Original Message-----
-        r'On .+ wrote:',  # On [date], [person] wrote:
-        r'From:.*?Sent:.*?To:',  # Outlook-style header (relaxed, multiline)
-        r'^\s*>.*$',  # Lines starting with >
-        r'Begin forwarded message:',  # Forwarded messages
-        r'_{30,}',  # Long underscore separator (30+ underscores)
-        r'From:\s*\S+\s*Sent:',  # From: [name] Sent: (without requiring newlines)
+        r"[-_]{3,}.*?Original Message.*?[-_]{3,}",  # -----Original Message-----
+        r"On .+ wrote:",  # On [date], [person] wrote:
+        r"From:.*?Sent:.*?To:",  # Outlook-style header (relaxed, multiline)
+        r"^\s*>.*$",  # Lines starting with >
+        r"Begin forwarded message:",  # Forwarded messages
+        r"_{30,}",  # Long underscore separator (30+ underscores)
+        r"From:\s*\S+\s*Sent:",  # From: [name] Sent: (without requiring newlines)
     ]
-    
+
     # Try each pattern and take text before the first match
     earliest_quote_pos = len(clean_text)
-    
+
     for pattern in quote_patterns:
         match = re.search(pattern, clean_text, re.MULTILINE | re.IGNORECASE | re.DOTALL)
         if match:
             earliest_quote_pos = min(earliest_quote_pos, match.start())
-    
+
     # Extract only the reply text (before any quoted content)
     reply_text = clean_text[:earliest_quote_pos].strip()
-    
+
     # Remove lines that start with > (quoted lines)
     reply_lines = []
-    for line in reply_text.split('\n'):
-        if not line.strip().startswith('>'):
+    for line in reply_text.split("\n"):
+        if not line.strip().startswith(">"):
             reply_lines.append(line)
-    
-    return '\n'.join(reply_lines).strip()
+
+    return "\n".join(reply_lines).strip()
 
 
 # Helper function for sentiment analysis and stakeholder status update
-def analyze_reply_and_update_stakeholder(reply_body: str, stakeholder_id: str, threshold: float) -> Optional[Dict[str, Any]]:
+def analyze_reply_and_update_stakeholder(
+    reply_body: str, stakeholder_id: str, threshold: float, case_id: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """
     Analyze reply sentiment and update stakeholder publication status.
-    
+
     Args:
         reply_body: The body text of the email reply
         stakeholder_id: ID of the stakeholder who sent the reply
         threshold: Confidence threshold for classification
-        
+        case_id: Optional case ID to mark chunks as objected if stakeholder disagrees
+
     Returns:
         Dictionary with analysis results including classification, confidence, scores, and status
     """
     try:
         # Get classifier
         classifier = get_classifier()
-        
+
         # Extract only the reply text (not quoted original message)
         clean_text = extract_reply_text(reply_body)
-        
+
         if not clean_text:
             logger.warning(f"Empty reply body for stakeholder {stakeholder_id}, setting status to pending")
             update_stakeholder(stakeholder_id, {"publication_status": "pending"})
@@ -121,23 +125,20 @@ def analyze_reply_and_update_stakeholder(reply_body: str, stakeholder_id: str, t
                 "classification": "none",
                 "confidence": 0.0,
                 "all_scores": {},
-                "publication_status": "pending"
+                "publication_status": "pending",
             }
-        
+
         # Perform classification
         result = classifier(clean_text, candidate_labels=CANDIDATE_LABELS)
-        
+
         top_label = result["labels"][0]
         top_score = result["scores"][0]
-        
+
         # Create score dictionary for all labels
-        all_scores = {
-            label: score 
-            for label, score in zip(result["labels"], result["scores"])
-        }
-        
+        all_scores = {label: score for label, score in zip(result["labels"], result["scores"])}
+
         logger.info(f"Sentiment analysis for stakeholder {stakeholder_id}: {top_label} ({top_score:.2f})")
-        
+
         # Determine publication status based on sentiment and threshold
         if top_score >= threshold:
             # Confidence is high enough to accept the classification
@@ -148,19 +149,27 @@ def analyze_reply_and_update_stakeholder(reply_body: str, stakeholder_id: str, t
         else:
             # Confidence is below threshold, treat as uncertain/disagree
             publication_status = "disagree"
-        
+
         # Update stakeholder publication status
         update_stakeholder(stakeholder_id, {"publication_status": publication_status})
         logger.info(f"Updated stakeholder {stakeholder_id} publication status to: {publication_status}")
-        
+
+        # If stakeholder disagrees and we have a case_id, mark all their chunks in the case as objected
+        if publication_status == "disagree" and case_id:
+            try:
+                mark_stakeholder_chunks_as_objected(case_id, stakeholder_id)
+                logger.info(f"Marked all chunks for stakeholder {stakeholder_id} in case {case_id} as objected")
+            except Exception as e:
+                logger.error(f"Failed to mark chunks as objected: {e}")
+
         return {
             "reply_text": clean_text[:500],  # Truncate for response
             "classification": top_label,
             "confidence": top_score,
             "all_scores": all_scores,
-            "publication_status": publication_status
+            "publication_status": publication_status,
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to analyze reply sentiment for stakeholder {stakeholder_id}: {e}")
         # On error, set to pending as a safe default
@@ -173,7 +182,7 @@ def analyze_reply_and_update_stakeholder(reply_body: str, stakeholder_id: str, t
             "classification": "error",
             "confidence": 0.0,
             "all_scores": {},
-            "publication_status": "pending"
+            "publication_status": "pending",
         }
 
 
@@ -374,7 +383,7 @@ class SentEmailListResponse(BaseModel):
 
 class SentimentAnalysisResult(BaseModel):
     """Result of sentiment analysis on a reply"""
-    
+
     reply_text: str
     classification: str
     confidence: float
@@ -674,7 +683,9 @@ def get_token_status(user_id: str):
 
 
 @email_router.post("/send", response_model=SendEmailResponse)
-def send_email(user_id: str, email_request: SendEmailRequest, case_id: Optional[str] = None, stakeholder_id: Optional[str] = None):
+def send_email(
+    user_id: str, email_request: SendEmailRequest, case_id: Optional[str] = None, stakeholder_id: Optional[str] = None
+):
     """
     Send an email via Microsoft Outlook.
 
@@ -1501,13 +1512,13 @@ def sync_email_replies(email_id: str, threshold: float = 0.5):
 
         # Process each message in the conversation
         conversation_messages = messages.get("value", [])
-        
+
         # Get stakeholder email to filter replies
         to_recipients = email_data.get("to_recipients", [])
         stakeholder_email = ""
         if to_recipients and isinstance(to_recipients, list):
             stakeholder_email = to_recipients[0].get("address", "").lower() if to_recipients else ""
-        
+
         for idx, msg in enumerate(conversation_messages):
             msg_id = msg.get("id")
 
@@ -1515,16 +1526,16 @@ def sync_email_replies(email_id: str, threshold: float = 0.5):
             if idx == 0:
                 logger.debug(f"Skipping first message in conversation (original sent email)")
                 continue
-            
+
             # Get sender info
             from_addr = msg.get("from", {}).get("emailAddress", {})
             from_email = from_addr.get("address", "").lower()
-            
+
             # Only process messages FROM the stakeholder
             if stakeholder_email and from_email != stakeholder_email:
                 logger.debug(f"Skipping message from {from_email} (not from stakeholder {stakeholder_email})")
                 continue
-            
+
             logger.info(f"Processing reply from stakeholder: {from_email}")
 
             # Check if reply already exists
@@ -1552,15 +1563,18 @@ def sync_email_replies(email_id: str, threshold: float = 0.5):
                 new_replies += 1
 
             save_email_reply(reply_data)
-            
+
             # If this email is associated with a stakeholder, perform sentiment analysis
             stakeholder_id = email_data.get("stakeholder_id")
+            case_id_from_email = email_data.get("case_id")
             if stakeholder_id and not existing_reply:
                 # Only analyze new replies (not updates)
                 reply_body = reply_data.get("body", "")
                 if reply_body:
                     logger.info(f"Analyzing sentiment for new reply from stakeholder {stakeholder_id}")
-                    analysis_result = analyze_reply_and_update_stakeholder(reply_body, stakeholder_id, threshold)
+                    analysis_result = analyze_reply_and_update_stakeholder(
+                        reply_body, stakeholder_id, threshold, case_id_from_email
+                    )
                     if analysis_result:
                         sentiment_results.append(analysis_result)
 
@@ -1627,13 +1641,13 @@ def sync_all_email_replies(user_id: str, threshold: float = 0.5):
 
                 # Process each message in the conversation
                 conversation_messages = messages.get("value", [])
-                
+
                 # Get stakeholder email to filter replies
                 to_recipients = email_data.get("to_recipients", [])
                 stakeholder_email = ""
                 if to_recipients and isinstance(to_recipients, list):
                     stakeholder_email = to_recipients[0].get("address", "").lower() if to_recipients else ""
-                
+
                 for idx, msg in enumerate(conversation_messages):
                     msg_id = msg.get("id")
 
@@ -1641,16 +1655,16 @@ def sync_all_email_replies(user_id: str, threshold: float = 0.5):
                     if idx == 0:
                         logger.debug(f"Skipping first message in conversation (original sent email)")
                         continue
-                    
+
                     # Get sender info
                     from_addr = msg.get("from", {}).get("emailAddress", {})
                     from_email = from_addr.get("address", "").lower()
-                    
+
                     # Only process messages FROM the stakeholder
                     if stakeholder_email and from_email != stakeholder_email:
                         logger.debug(f"Skipping message from {from_email} (not from stakeholder {stakeholder_email})")
                         continue
-                    
+
                     logger.info(f"Processing reply from stakeholder: {from_email}")
 
                     # Check if reply already exists
@@ -1678,15 +1692,18 @@ def sync_all_email_replies(user_id: str, threshold: float = 0.5):
                         total_new += 1
 
                     save_email_reply(reply_data)
-                    
+
                     # If this email is associated with a stakeholder, perform sentiment analysis
                     stakeholder_id = email_data.get("stakeholder_id")
+                    case_id_from_email = email_data.get("case_id")
                     if stakeholder_id and not existing_reply:
                         # Only analyze new replies (not updates)
                         reply_body = reply_data.get("body", "")
                         if reply_body:
                             logger.info(f"Analyzing sentiment for new reply from stakeholder {stakeholder_id}")
-                            analysis_result = analyze_reply_and_update_stakeholder(reply_body, stakeholder_id, threshold)
+                            analysis_result = analyze_reply_and_update_stakeholder(
+                                reply_body, stakeholder_id, threshold, case_id_from_email
+                            )
                             if analysis_result:
                                 sentiment_results.append(analysis_result)
 

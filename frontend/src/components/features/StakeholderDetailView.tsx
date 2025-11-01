@@ -6,7 +6,7 @@ import { useSendStakeholderEmail, useGenerateStakeholderPDF, useStakeholderEmail
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { CheckCircle2, Mail, FileText, Clock } from 'lucide-react';
+import { Check, Mail, FileText, Clock } from 'lucide-react';
 import { StakeholderEmailSettings } from './StakeholderEmailSettings';
 import { EmailTimeline } from './EmailTimeline';
 import { EmailAuthDialog } from './EmailAuthDialog';
@@ -148,7 +148,7 @@ export function StakeholderDetailView({
             case 'contacted_old':
                 return <Clock className="h-5 w-5 text-orange-600" />;
             case 'responded':
-                return <CheckCircle2 className="h-5 w-5 text-green-600" />;
+                return <Check className="h-5 w-5 text-green-600" />;
             default:
                 return <FileText className="h-5 w-5 text-gray-500" />;
         }

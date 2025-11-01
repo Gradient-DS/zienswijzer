@@ -82,6 +82,7 @@ class MarkdownNERProcessorDB:
         if pdf_path and Path(pdf_path).exists():
             try:
                 import fitz  # PyMuPDF
+
                 self.pdf_doc = fitz.open(pdf_path)
                 if self.verbose:
                     self._print(f"Opened PDF: {pdf_path} ({len(self.pdf_doc)} pages)")
@@ -105,6 +106,7 @@ class MarkdownNERProcessorDB:
 
         try:
             import fitz  # PyMuPDF
+
             self.pdf_text = ""
             self.pdf_pages_text = []
             # Store mapping from character position to bounding box
@@ -113,50 +115,52 @@ class MarkdownNERProcessorDB:
             char_offset = 0
             for page_num in range(len(self.pdf_doc)):
                 page = self.pdf_doc[page_num]
-                
+
                 # Get text with positions for better matching
                 text_dict = page.get_text("dict")
                 page_text_from_dict = ""
-                
+
                 # Extract text with character positions and bounding boxes
                 for block in text_dict.get("blocks", []):
                     if "lines" not in block:
                         continue
-                    
+
                     for line in block["lines"]:
                         for span in line["spans"]:
                             span_text = span.get("text", "")
                             span_bbox = span.get("bbox", [])
-                            
+
                             if len(span_bbox) == 4:
                                 # Store bbox for the span (more efficient than per-character)
                                 span_start = char_offset + len(page_text_from_dict)
                                 span_end = span_start + len(span_text)
-                                
-                                self.char_to_bbox.append({
-                                    "char_index_start": span_start,
-                                    "char_index_end": span_end,
-                                    "bbox": {
-                                        "x": span_bbox[0],
-                                        "y": span_bbox[1],
-                                        "width": span_bbox[2] - span_bbox[0],
-                                        "height": span_bbox[3] - span_bbox[1],
-                                    },
-                                    "page_num": page_num + 1,
-                                    "text": span_text,
-                                })
-                            
+
+                                self.char_to_bbox.append(
+                                    {
+                                        "char_index_start": span_start,
+                                        "char_index_end": span_end,
+                                        "bbox": {
+                                            "x": span_bbox[0],
+                                            "y": span_bbox[1],
+                                            "width": span_bbox[2] - span_bbox[0],
+                                            "height": span_bbox[3] - span_bbox[1],
+                                        },
+                                        "page_num": page_num + 1,
+                                        "text": span_text,
+                                    }
+                                )
+
                             page_text_from_dict += span_text
-                        
+
                         page_text_from_dict += "\n"
-                    
+
                     page_text_from_dict += "\n"
-                
+
                 # Use the same text from dict extraction for consistency
                 self.pdf_text += page_text_from_dict
-                
+
                 char_offset += len(page_text_from_dict)
-                
+
                 self.pdf_pages_text.append(
                     {
                         "page_num": page_num + 1,  # 1-based for frontend
@@ -328,7 +332,8 @@ class MarkdownNERProcessorDB:
             Dictionary with 'created', 'skipped', 'total' counts
         """
         if not self.entities:
-            raise ValueError("No entities found. Run perform_ner() first.")
+            self._print("No entities found.")
+            return {"created": 0, "skipped": 0, "total": 0}
 
         # Initialize database
         self._print("\nInitializing database...")
@@ -441,7 +446,7 @@ class MarkdownNERProcessorDB:
     ) -> Optional[Dict]:
         """
         Get bounding box for a chunk from PDF using character positions.
-        
+
         Uses the character-to-bbox mapping created during PDF text extraction.
         """
         if not hasattr(self, "pdf_doc") or self.pdf_doc is None:
@@ -457,19 +462,18 @@ class MarkdownNERProcessorDB:
             for entry in self.char_to_bbox:
                 entry_start = entry.get("char_index_start", entry.get("char_index", 0))
                 entry_end = entry.get("char_index_end", entry_start + 1)
-                
+
                 # Check if span overlaps with chunk
-                if (entry_start < chunk_end and entry_end > chunk_start and 
-                    (page is None or entry["page_num"] == page)):
+                if entry_start < chunk_end and entry_end > chunk_start and (page is None or entry["page_num"] == page):
                     chunk_bboxes.append(entry["bbox"])
-            
+
             if chunk_bboxes:
                 # Calculate bounding box encompassing all spans in chunk
                 min_x = min(bbox["x"] for bbox in chunk_bboxes)
                 min_y = min(bbox["y"] for bbox in chunk_bboxes)
                 max_x = max(bbox["x"] + bbox["width"] for bbox in chunk_bboxes)
                 max_y = max(bbox["y"] + bbox["height"] for bbox in chunk_bboxes)
-                
+
                 return {
                     "x": min_x,
                     "y": min_y,
@@ -580,7 +584,7 @@ class MarkdownNERProcessorDB:
             y_offset = (int(chunk_hash[4:8], 16) % 600) + 50  # 50-650
             chunk_bbox = {
                 "x": float(x_offset),
-                "y": float(y_offset + (page - 1) * 800),  # Offset by page
+                "y": float(y_offset),  # Page-relative coordinates (no offset)
                 "width": 400.0,
                 "height": 100.0,
             }
@@ -599,10 +603,12 @@ class MarkdownNERProcessorDB:
 
         return chunk_id
 
-    def _get_entity_bbox_from_pdf(self, mention_text: str, page: int, chunk_text: Optional[str] = None, chunk_start: Optional[int] = None) -> Optional[Dict]:
+    def _get_entity_bbox_from_pdf(
+        self, mention_text: str, page: int, chunk_text: Optional[str] = None, chunk_start: Optional[int] = None
+    ) -> Optional[Dict]:
         """
         Get bounding box for an entity mention from PDF using PyMuPDF.
-        
+
         This finds the exact bounding box of the entity text in the PDF.
         If chunk_text and chunk_start are provided, it searches within that chunk's region first.
         """
@@ -630,12 +636,12 @@ class MarkdownNERProcessorDB:
 
             # Method 1: Search for text in spans (most accurate for exact matches)
             text_dict = pdf_page.get_text("dict")
-            
+
             # If we have chunk context, try to find the mention within that chunk first
             if chunk_text and chunk_start is not None:
                 # Find the chunk's bounding box area
                 chunk_bbox = self._get_chunk_bbox_from_pdf(chunk_text, chunk_start, chunk_start + len(chunk_text), page)
-                
+
             for block in text_dict.get("blocks", []):
                 if "lines" not in block:
                     continue
@@ -647,7 +653,7 @@ class MarkdownNERProcessorDB:
                         # Check if mention text is in this span (case-insensitive, lenient matching)
                         span_text_normalized = span_text.replace(" ", "").lower()
                         mention_normalized = mention_text_clean.replace(" ", "").lower()
-                        
+
                         if (
                             mention_text_clean.lower() in span_text.lower()
                             or span_text.lower() in mention_text_clean.lower()
@@ -661,16 +667,19 @@ class MarkdownNERProcessorDB:
                                 if chunk_text and chunk_start is not None and chunk_bbox:
                                     span_center_x = (span_bbox[0] + span_bbox[2]) / 2
                                     span_center_y = (span_bbox[1] + span_bbox[3]) / 2
-                                    
-                                    if not (chunk_bbox["x"] <= span_center_x <= chunk_bbox["x"] + chunk_bbox["width"] and
-                                            chunk_bbox["y"] <= span_center_y <= chunk_bbox["y"] + chunk_bbox["height"]):
+
+                                    if not (
+                                        chunk_bbox["x"] <= span_center_x <= chunk_bbox["x"] + chunk_bbox["width"]
+                                        and chunk_bbox["y"] <= span_center_y <= chunk_bbox["y"] + chunk_bbox["height"]
+                                    ):
                                         continue  # Skip if outside chunk area
-                                
+
                                 return {
                                     "x": span_bbox[0],
                                     "y": span_bbox[1],
                                     "width": max(span_bbox[2] - span_bbox[0], 50.0),
                                     "height": max(span_bbox[3] - span_bbox[1], 10.0),
+                                    "page": page,
                                 }
 
             # Method 2: Fallback to direct page search
@@ -679,7 +688,7 @@ class MarkdownNERProcessorDB:
                 mention_text_clean.replace(" ", ""),
                 " ".join(mention_text_clean.split()),
             ]
-            
+
             for variant in mention_variants:
                 if len(variant) >= 2:
                     text_instances = pdf_page.search_for(variant)
@@ -690,6 +699,7 @@ class MarkdownNERProcessorDB:
                             "y": rect.y0,
                             "width": max(rect.x1 - rect.x0, 50.0),
                             "height": max(rect.y1 - rect.y0, 10.0),
+                            "page": page,
                         }
 
         except Exception as e:
@@ -736,9 +746,10 @@ class MarkdownNERProcessorDB:
             y_offset = (int(mention_hash[4:8], 16) % 600) + 100  # 100-700
             mention_bbox = {
                 "x": float(x_offset),
-                "y": float(y_offset + (page - 1) * 800),  # Offset by page
+                "y": float(y_offset),  # Page-relative coordinates (no offset)
                 "width": max(len(mention_text) * 8.0, 80.0),  # Width based on text length
                 "height": 20.0,
+                "page": page,
             }
 
         # Check for overlapping bounding boxes with existing mentions
@@ -751,9 +762,8 @@ class MarkdownNERProcessorDB:
                     existing_bbox = json.loads(existing_bbox)
 
                 # Check if same stakeholder and overlapping bbox (same entity mention)
-                if (
-                    existing.get("stakeholder_id") == stakeholder_id
-                    and self._bboxes_overlap(mention_bbox, existing_bbox, overlap_threshold=0.5)
+                if existing.get("stakeholder_id") == stakeholder_id and self._bboxes_overlap(
+                    mention_bbox, existing_bbox, overlap_threshold=0.5
                 ):
                     if self.verbose:
                         self._print(
@@ -829,21 +839,58 @@ class MarkdownNERProcessorDB:
             for page_info in self.pdf_pages_text:
                 page_text_len = len(page_info["text"])
                 if chunk_start < current_pos + page_text_len:
+                    if self.verbose and False:  # Disable verbose debug per chunk
+                        self._print(
+                            f"    Chunk [{chunk_start}:{chunk_end}] → Page {page_info['page_num']} (page text range: [{current_pos}:{current_pos + page_text_len}])"
+                        )
                     return page_info["page_num"]
                 current_pos += page_text_len + 1  # +1 for newline
 
-            return self.pdf_pages_text[-1]["page_num"] if self.pdf_pages_text else 1
+            # If we're here, chunk is beyond all pages - assign to last page
+            last_page = self.pdf_pages_text[-1]["page_num"] if self.pdf_pages_text else 1
+            if self.verbose:
+                self._print(
+                    f"    Warning: Chunk [{chunk_start}:{chunk_end}] exceeds PDF text length, assigning to last page {last_page}"
+                )
+            return last_page
 
         # Create chunk records in database
         chunk_records = {}  # chunk index -> {'chunk_id': ..., 'chunk': ..., 'page': ...}
 
         self._print("\nCreating chunks in database...")
+        self._print(
+            f"  PDF text available: {bool(self.pdf_text)}, Length: {len(self.pdf_text) if self.pdf_text else 0}"
+        )
+        self._print(
+            f"  PDF pages text available: {bool(self.pdf_pages_text)}, Pages: {len(self.pdf_pages_text) if self.pdf_pages_text else 0}"
+        )
+
+        # Debug: show page text length distribution
+        if self.pdf_pages_text:
+            self._print(
+                f"  Page text lengths: {[len(p['text']) for p in self.pdf_pages_text[:5]]}{'...' if len(self.pdf_pages_text) > 5 else ''}"
+            )
+
+        page_distribution = {}
         for i, chunk in enumerate(text_chunks):
-            chunk_page = get_chunk_page(chunk.get("start", 0), chunk.get("end", 0)) if self.pdf_text else 1
+            # Use PDF text for page detection if available
+            if self.pdf_text and self.pdf_pages_text:
+                chunk_page = get_chunk_page(chunk.get("start", 0), chunk.get("end", 0))
+            else:
+                chunk_page = 1
+
             chunk_id = self._create_chunk(self.document_id, chunk, page=chunk_page)
             chunk_records[i] = {"chunk_id": chunk_id, "chunk": chunk, "page": chunk_page}
 
+            # Track page distribution
+            page_distribution[chunk_page] = page_distribution.get(chunk_page, 0) + 1
+
+            # Debug: show first 5 chunks
+            if i < 5:
+                self._print(f"    Chunk {i}: pos [{chunk.get('start', 0)}:{chunk.get('end', 0)}] → Page {chunk_page}")
+
         self._print(f"  ✓ Created {len(chunk_records)} chunks in database")
+        self._print(f"  Page distribution: {page_distribution}")
 
         # Map ALL entity occurrences to chunks and create ChunkStakeholder records
         self._print("\nMapping entities to chunks and creating ChunkStakeholder records...")
@@ -1023,4 +1070,3 @@ class MarkdownNERProcessorDB:
                 self.pdf_doc.close()
             except:
                 pass
-
