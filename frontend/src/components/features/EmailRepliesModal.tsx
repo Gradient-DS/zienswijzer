@@ -25,6 +25,10 @@ function formatDate(dateString: string): string {
     }
 }
 
+function stripImages(html: string): string {
+    return html.replace(/<img[^>]*>/gi, '');
+}
+
 export function EmailRepliesModal({ email, open, onOpenChange }: EmailRepliesModalProps) {
     const { data: replies = [], refetch: refetchReplies } = useEmailReplies(email?.id);
     const syncReplies = useSyncEmailReplies();
@@ -135,9 +139,16 @@ export function EmailRepliesModal({ email, open, onOpenChange }: EmailRepliesMod
                                         </div>
                                         <div className="text-sm text-gray-700">
                                             <div className="font-medium mb-1">{reply.subject}</div>
-                                            <div className="text-gray-600 whitespace-pre-wrap">
-                                                {reply.body || reply.bodyPreview || 'Geen preview beschikbaar'}
-                                            </div>
+                                            {reply.body ? (
+                                                <div
+                                                    className="prose prose-sm max-w-none text-gray-600"
+                                                    dangerouslySetInnerHTML={{ __html: stripImages(reply.body) }}
+                                                />
+                                            ) : (
+                                                <div className="text-gray-600 whitespace-pre-wrap">
+                                                    {reply.bodyPreview || 'Geen preview beschikbaar'}
+                                                </div>
+                                            )}
                                         </div>
                                     </CardContent>
                                 </Card>

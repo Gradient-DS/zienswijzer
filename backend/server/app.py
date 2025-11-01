@@ -1005,7 +1005,7 @@ class UpdateStakeholderPublicationStatusRequest(BaseModel):
     publication_status: Optional[str] = None  # 'agree', 'disagree', 'pending', or None
 
 
-class StakeholderResponse(BaseModel):
+class SingleStakeholderResponse(BaseModel):
     stakeholder: Stakeholder
 
 
@@ -1080,14 +1080,14 @@ def get_stakeholders():
     return StakeholderListResponse(stakeholders=stakeholders)
 
 
-@app.get("/stakeholders/{stakeholder_id}", response_model=StakeholderResponse)
+@app.get("/stakeholders/{stakeholder_id}", response_model=SingleStakeholderResponse)
 def get_stakeholder(stakeholder_id: str):
     """Get a stakeholder by ID"""
     stakeholder = db.get_stakeholder_by_id(stakeholder_id)
     if not stakeholder:
         raise HTTPException(status_code=404, detail="Stakeholder not found")
 
-    return StakeholderResponse(
+    return SingleStakeholderResponse(
         stakeholder=Stakeholder(
             id=stakeholder["id"],
             type=stakeholder.get("type"),
@@ -1100,7 +1100,7 @@ def get_stakeholder(stakeholder_id: str):
     )
 
 
-@app.patch("/stakeholders/{stakeholder_id}/publication-status", response_model=StakeholderResponse)
+@app.patch("/stakeholders/{stakeholder_id}/publication-status", response_model=SingleStakeholderResponse)
 def update_stakeholder_publication_status(stakeholder_id: str, request: UpdateStakeholderPublicationStatusRequest):
     """Update a stakeholder's publication status"""
     # Validate publication_status value if provided
@@ -1122,7 +1122,7 @@ def update_stakeholder_publication_status(stakeholder_id: str, request: UpdateSt
 
     # Return updated stakeholder
     updated_stakeholder = db.get_stakeholder_by_id(stakeholder_id)
-    return StakeholderResponse(
+    return SingleStakeholderResponse(
         stakeholder=Stakeholder(
             id=updated_stakeholder["id"],
             type=updated_stakeholder.get("type"),

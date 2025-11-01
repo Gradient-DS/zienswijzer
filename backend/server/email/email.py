@@ -330,6 +330,7 @@ class SentEmail(BaseModel):
     sentAt: str
     caseId: Optional[str] = None
     stakeholderId: Optional[str] = None
+    replyCount: Optional[int] = None
     createdAt: str
 
 
@@ -1249,6 +1250,10 @@ def get_sent_emails_list(user_id: Optional[str] = None, case_id: Optional[str] =
 
         emails = []
         for email_data in emails_data:
+            # Get reply count for this email
+            replies = get_email_replies(email_data["id"])
+            reply_count = len(replies) if replies else 0
+
             emails.append(
                 SentEmail(
                     id=email_data["id"],
@@ -1274,6 +1279,7 @@ def get_sent_emails_list(user_id: Optional[str] = None, case_id: Optional[str] =
                     sentAt=email_data["sent_at"],
                     caseId=email_data.get("case_id"),
                     stakeholderId=email_data.get("stakeholder_id"),
+                    replyCount=reply_count,
                     createdAt=email_data["created_at"],
                 )
             )

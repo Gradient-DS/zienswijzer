@@ -7,10 +7,6 @@ interface StakeholderListResponse {
     stakeholders: Stakeholder[];
 }
 
-interface ChunkListResponse {
-    chunks: ChunkDetail[];
-}
-
 export const useCaseStakeholders = (caseId: string | undefined) => {
     return useQuery({
         queryKey: ['cases', caseId, 'stakeholders'],
@@ -46,13 +42,13 @@ export const useStakeholderMentions = (caseId: string | undefined, stakeholderId
                         const chunks = (chunksRes.data.chunks || []).map(transformChunkDetail);
 
                         const filteredChunks = chunks
-                            .map(chunk => ({
+                            .map((chunk: ChunkDetail) => ({
                                 ...chunk,
                                 stakeholder_mentions: chunk.stakeholder_mentions.filter(
-                                    mention => mention.stakeholder_id === stakeholderId
+                                    (mention: any) => mention.stakeholder_id === stakeholderId
                                 )
                             }))
-                            .filter(chunk => chunk.stakeholder_mentions.length > 0);
+                            .filter((chunk: ChunkDetail) => chunk.stakeholder_mentions.length > 0);
 
                         allChunks.push(...filteredChunks);
                     } catch (error) {
@@ -89,8 +85,8 @@ export const useStakeholderVerificationStatus = (caseId: string | undefined) => 
                         });
                         const chunks = (chunksRes.data.chunks || []).map(transformChunkDetail);
 
-                        chunks.forEach(chunk => {
-                            chunk.stakeholder_mentions.forEach(mention => {
+                        chunks.forEach((chunk: ChunkDetail) => {
+                            chunk.stakeholder_mentions.forEach((mention: any) => {
                                 const current = stakeholderMentions.get(mention.stakeholder_id) || { verified: 0, total: 0 };
                                 current.total += 1;
                                 if (mention.checked && mention.accepted) {
@@ -118,6 +114,62 @@ export const useStakeholderVerificationStatus = (caseId: string | undefined) => 
             }
         },
         enabled: !!caseId,
+    });
+};
+
+export const useAllStakeholderMentions = (caseId: string | undefined) => {
+    return useQuery({
+        queryKey: ['cases', caseId, 'all-stakeholder-mentions'],
+        queryFn: async () => {
+            if (!caseId) return new Map<string, ChunkDetail[]>();
+
+            try {
+                const caseRes = await apiClient.get(`/cases/${caseId}`);
+                const documents = caseRes.data.case.documents || [];
+
+                const stakeholderChunksMap = new Map<string, ChunkDetail[]>();
+
+                for (const doc of documents) {
+                    try {
+                        const chunksRes = await apiClient.get<any>(`/documents/${doc.id}/chunks`, {
+                            params: { case_id: caseId }
+                        });
+                        const chunks = (chunksRes.data.chunks || []).map(transformChunkDetail);
+
+                        chunks.forEach((chunk: ChunkDetail) => {
+                            chunk.stakeholder_mentions.forEach((mention: any) => {
+                                const stakeholderId = mention.stakeholder_id;
+                                if (!stakeholderChunksMap.has(stakeholderId)) {
+                                    stakeholderChunksMap.set(stakeholderId, []);
+                                }
+
+                                const existingChunks = stakeholderChunksMap.get(stakeholderId)!;
+                                const chunkIndex = existingChunks.findIndex(c => c.id === chunk.id);
+
+                                if (chunkIndex === -1) {
+                                    const filteredChunk = {
+                                        ...chunk,
+                                        stakeholder_mentions: chunk.stakeholder_mentions.filter(
+                                            (m: any) => m.stakeholder_id === stakeholderId
+                                        )
+                                    };
+                                    existingChunks.push(filteredChunk);
+                                }
+                            });
+                        });
+                    } catch (error) {
+                        console.error(`Failed to fetch chunks for document ${doc.id}:`, error);
+                    }
+                }
+
+                return stakeholderChunksMap;
+            } catch (error) {
+                console.error('Failed to fetch all stakeholder mentions:', error);
+                return new Map<string, ChunkDetail[]>();
+            }
+        },
+        enabled: !!caseId,
+        staleTime: 5 * 60 * 1000,
     });
 };
 

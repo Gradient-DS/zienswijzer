@@ -32,6 +32,7 @@ export interface SentEmail {
     sentAt: string;
     caseId?: string;
     stakeholderId?: string;
+    replyCount?: number;
     createdAt: string;
 }
 
