@@ -9,16 +9,12 @@ from datetime import datetime
 from pathlib import Path
 import shutil
 import uuid
+import json
 from server import db
 from server.utils.parsing import main as parse_pdf
-from server.utils.ner_processor import MarkdownNERProcessor
+from server.utils.ner_processor_db import MarkdownNERProcessorDB
 import random
 from server.utils.text_processor import transform_text
-from server.utils.chunk_generator import (
-    generate_fake_chunks,
-    generate_fake_stakeholders,
-    generate_fake_chunk_stakeholders,
-)
 import logging
 
 
@@ -700,6 +696,13 @@ def get_document_detail(document_id: str, case_id: Optional[str] = Query(None)):
         for cs in chunk_stakeholders:
             stakeholder = db.get_stakeholder_by_id(cs["stakeholder_id"])
             if stakeholder:
+                # Handle mention_bbox backward compatibility (add page if missing)
+                mention_bbox_dict = (
+                    cs["mention_bbox"] if isinstance(cs["mention_bbox"], dict) else json.loads(cs["mention_bbox"])
+                )
+                if "page" not in mention_bbox_dict:
+                    mention_bbox_dict["page"] = chunk["page"]
+
                 stakeholder_mentions.append(
                     StakeholderMention(
                         id=cs["id"],
@@ -716,11 +719,16 @@ def get_document_detail(document_id: str, case_id: Optional[str] = Query(None)):
                         ),
                         confidence=cs["confidence"],
                         mention_text=cs["mention_text"],
-                        mention_bbox=BoundingBox(**cs["mention_bbox"]),
+                        mention_bbox=BoundingBox(**mention_bbox_dict),
                         verified=bool(cs["verified"]) if cs["verified"] is not None else None,
                         created_at=cs["created_at"],
                     )
                 )
+
+        # Ensure bbox has page field (backward compatibility for chunks created without page in bbox)
+        bbox_dict = chunk["bbox"].copy()
+        if "page" not in bbox_dict:
+            bbox_dict["page"] = chunk["page"]
 
         chunks_with_mentions.append(
             ChunkDetail(
@@ -728,7 +736,7 @@ def get_document_detail(document_id: str, case_id: Optional[str] = Query(None)):
                 document_id=chunk["document_id"],
                 page=chunk["page"],
                 context=chunk["context"],
-                bbox=BoundingBox(**chunk["bbox"]),
+                bbox=BoundingBox(**bbox_dict),
                 stakeholder_mentions=stakeholder_mentions,
             )
         )
@@ -785,7 +793,7 @@ def get_document_chunks(document_id: str, case_id: Optional[str] = Query(None)):
         raise HTTPException(status_code=404, detail="Document not found")
 
     document_chunks = db.get_chunks_by_document(document_id)
-    logger.info(f"Document chunks: {document_chunks}")
+    logger.info(f"Document chunks count: {len(document_chunks)}")
     if not document_chunks:
         return ChunkListResponse(chunks=[])
 
@@ -797,6 +805,13 @@ def get_document_chunks(document_id: str, case_id: Optional[str] = Query(None)):
         for cs in chunk_stakeholders:
             stakeholder = db.get_stakeholder_by_id(cs["stakeholder_id"])
             if stakeholder:
+                # Handle mention_bbox backward compatibility (add page if missing)
+                mention_bbox_dict = (
+                    cs["mention_bbox"] if isinstance(cs["mention_bbox"], dict) else json.loads(cs["mention_bbox"])
+                )
+                if "page" not in mention_bbox_dict:
+                    mention_bbox_dict["page"] = chunk["page"]
+
                 stakeholder_mentions.append(
                     StakeholderMention(
                         id=cs["id"],
@@ -813,11 +828,16 @@ def get_document_chunks(document_id: str, case_id: Optional[str] = Query(None)):
                         ),
                         confidence=cs["confidence"],
                         mention_text=cs["mention_text"],
-                        mention_bbox=BoundingBox(**cs["mention_bbox"]),
+                        mention_bbox=BoundingBox(**mention_bbox_dict),
                         verified=bool(cs["verified"]) if cs["verified"] is not None else None,
                         created_at=cs["created_at"],
                     )
                 )
+
+        # Ensure bbox has page field (backward compatibility for chunks created without page in bbox)
+        bbox_dict = chunk["bbox"].copy()
+        if "page" not in bbox_dict:
+            bbox_dict["page"] = chunk["page"]
 
         chunks_with_mentions.append(
             ChunkDetail(
@@ -825,7 +845,7 @@ def get_document_chunks(document_id: str, case_id: Optional[str] = Query(None)):
                 document_id=chunk["document_id"],
                 page=chunk["page"],
                 context=chunk["context"],
-                bbox=BoundingBox(**chunk["bbox"]),
+                bbox=BoundingBox(**bbox_dict),
                 stakeholder_mentions=stakeholder_mentions,
             )
         )
@@ -843,9 +863,14 @@ def background_parse_document(doc_id: str, page_count: int):
     parse_pdf(doc_id)
     logger.info("Starting entity extraction")
     document = db.get_document_by_id(doc_id)
-    processor = MarkdownNERProcessor(
+
+    # Convert relative file path to absolute path
+    file_path = Path(__file__).parent / document["file_path"]
+    logger.info(f"PDF path for NER processing: {file_path}")
+
+    processor = MarkdownNERProcessorDB(
         markdown_path=str(document["markdown_path"]),
-        pdf_path=str(document["file_path"]),  # ← PDF for chunking and bounding boxes
+        pdf_path=str(file_path),  # ← Absolute path to PDF for chunking and bounding boxes
         document_id=doc_id,
         entity_types=None,
         stakeholder_types_to_save=["person", "organization"],
