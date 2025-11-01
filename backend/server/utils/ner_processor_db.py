@@ -513,8 +513,8 @@ class MarkdownNERProcessorDB:
                     return {
                         "x": rect.x0,
                         "y": rect.y0,
-                        "width": max(rect.x1 - rect.x0, 300.0),
-                        "height": max(rect.y1 - rect.y0, 50.0),
+                        "width": rect.x1 - rect.x0,
+                        "height": rect.y1 - rect.y0,
                     }
 
         return None
@@ -603,14 +603,71 @@ class MarkdownNERProcessorDB:
 
         return chunk_id
 
+    def _validate_bbox_text(
+        self, bbox: Dict, expected_text: str, pdf_page: any
+    ) -> bool:
+        """
+        Validate that a bounding box contains the expected text and is not empty.
+        
+        Args:
+            bbox: Bounding box dict with x, y, width, height
+            expected_text: The expected entity text
+            pdf_page: PyMuPDF page object
+            
+        Returns:
+            True if bbox contains expected text, False otherwise
+        """
+        try:
+            import fitz  # PyMuPDF
+            
+            # Create a rectangle from the bbox
+            rect = fitz.Rect(
+                bbox["x"],
+                bbox["y"],
+                bbox["x"] + bbox["width"],
+                bbox["y"] + bbox["height"],
+            )
+            
+            # Extract text from within the rectangle
+            extracted_text = pdf_page.get_textbox(rect).strip()
+            
+            # Check if bbox is in empty area
+            if not extracted_text:
+                return False
+            
+            # Normalize both texts for comparison (remove spaces, convert to lowercase)
+            extracted_normalized = extracted_text.replace(" ", "").lower()
+            expected_normalized = expected_text.strip().replace(" ", "").lower()
+            
+            # Check if extracted text matches or contains expected text
+            # Also check reverse (expected contains extracted) to handle partial matches
+            if (
+                expected_normalized == extracted_normalized
+                or expected_normalized in extracted_normalized
+                or extracted_normalized in expected_normalized
+            ):
+                # Additional check: if we're looking for "NVWA", extracted shouldn't be just "VW"
+                # Require at least 70% of expected text length to prevent partial matches
+                min_length = max(2, int(len(expected_normalized) * 0.7))
+                if len(extracted_normalized) >= min_length:
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            if hasattr(self, "verbose") and self.verbose:
+                self._print(f"  Warning: Error validating bbox text: {e}")
+            return False
+
     def _get_entity_bbox_from_pdf(
         self, mention_text: str, page: int, chunk_text: Optional[str] = None, chunk_start: Optional[int] = None
     ) -> Optional[Dict]:
         """
         Get bounding box for an entity mention from PDF using PyMuPDF.
 
-        This finds the exact bounding box of the entity text in the PDF.
+        This finds the exact bounding box of the entity text in the PDF using word-level bboxes.
         If chunk_text and chunk_start are provided, it searches within that chunk's region first.
+        Validates that the bbox contains the expected text and is not empty.
         """
         if not hasattr(self, "pdf_doc") or self.pdf_doc is None:
             return None
@@ -633,56 +690,91 @@ class MarkdownNERProcessorDB:
 
             # Clean and normalize mention text
             mention_text_clean = mention_text.strip()
+            mention_words = mention_text_clean.split()
+            mention_normalized = mention_text_clean.lower().replace(" ", "")
 
-            # Method 1: Search for text in spans (most accurate for exact matches)
-            text_dict = pdf_page.get_text("dict")
-
-            # If we have chunk context, try to find the mention within that chunk first
+            # Get chunk bbox for filtering if available
+            chunk_bbox = None
             if chunk_text and chunk_start is not None:
-                # Find the chunk's bounding box area
                 chunk_bbox = self._get_chunk_bbox_from_pdf(chunk_text, chunk_start, chunk_start + len(chunk_text), page)
 
-            for block in text_dict.get("blocks", []):
-                if "lines" not in block:
-                    continue
+            # Method 1: Use word-level bboxes (most accurate for individual words/phrases)
+            # get_text("words") returns: (x0, y0, x1, y1, "word", block_no, line_no, word_no)
+            words = pdf_page.get_text("words")
 
-                for line in block["lines"]:
-                    for span in line["spans"]:
-                        span_text = span.get("text", "").strip()
+            if words:
+                # Find consecutive words that match the entity
+                for i, word_info in enumerate(words):
+                    word_bbox = word_info[:4]  # (x0, y0, x1, y1)
+                    word_text = word_info[4] if len(word_info) > 4 else ""
 
-                        # Check if mention text is in this span (case-insensitive, lenient matching)
-                        span_text_normalized = span_text.replace(" ", "").lower()
-                        mention_normalized = mention_text_clean.replace(" ", "").lower()
+                    # Check if this word is part of the entity
+                    # For single-word entities, exact match
+                    if len(mention_words) == 1:
+                        if word_text.lower() == mention_words[0].lower():
+                            # Verify within chunk area if provided
+                            if chunk_bbox:
+                                word_center_x = (word_bbox[0] + word_bbox[2]) / 2
+                                word_center_y = (word_bbox[1] + word_bbox[3]) / 2
+                                if not (
+                                    chunk_bbox["x"] <= word_center_x <= chunk_bbox["x"] + chunk_bbox["width"]
+                                    and chunk_bbox["y"] <= word_center_y <= chunk_bbox["y"] + chunk_bbox["height"]
+                                ):
+                                    continue
+                            
+                            # Found exact word match - validate bbox contains expected text
+                            candidate_bbox = {
+                                "x": word_bbox[0],
+                                "y": word_bbox[1],
+                                "width": word_bbox[2] - word_bbox[0],
+                                "height": word_bbox[3] - word_bbox[1],
+                                "page": page,
+                            }
+                            
+                            if self._validate_bbox_text(candidate_bbox, mention_text_clean, pdf_page):
+                                return candidate_bbox
+                    else:
+                        # Multi-word entity: find consecutive words matching the entity
+                        if i + len(mention_words) <= len(words):
+                            matched_words = []
+                            for j, expected_word in enumerate(mention_words):
+                                if i + j < len(words):
+                                    check_word = words[i + j][4] if len(words[i + j]) > 4 else ""
+                                    if check_word.lower() == expected_word.lower():
+                                        matched_words.append(words[i + j])
+                                    else:
+                                        break
+                            
+                            if len(matched_words) == len(mention_words):
+                                # All words matched, calculate combined bbox
+                                all_x0 = [w[0] for w in matched_words]
+                                all_y0 = [w[1] for w in matched_words]
+                                all_x1 = [w[2] for w in matched_words]
+                                all_y1 = [w[3] for w in matched_words]
 
-                        if (
-                            mention_text_clean.lower() in span_text.lower()
-                            or span_text.lower() in mention_text_clean.lower()
-                            or mention_normalized == span_text_normalized
-                            or mention_normalized in span_text_normalized
-                            or span_text_normalized in mention_normalized
-                        ):
-                            span_bbox = span.get("bbox", [])
-                            if len(span_bbox) == 4:
-                                # If chunk bbox exists, verify this span is within it
-                                if chunk_text and chunk_start is not None and chunk_bbox:
-                                    span_center_x = (span_bbox[0] + span_bbox[2]) / 2
-                                    span_center_y = (span_bbox[1] + span_bbox[3]) / 2
-
+                                # Verify within chunk area if provided
+                                if chunk_bbox:
+                                    combined_center_x = (min(all_x0) + max(all_x1)) / 2
+                                    combined_center_y = (min(all_y0) + max(all_y1)) / 2
                                     if not (
-                                        chunk_bbox["x"] <= span_center_x <= chunk_bbox["x"] + chunk_bbox["width"]
-                                        and chunk_bbox["y"] <= span_center_y <= chunk_bbox["y"] + chunk_bbox["height"]
+                                        chunk_bbox["x"] <= combined_center_x <= chunk_bbox["x"] + chunk_bbox["width"]
+                                        and chunk_bbox["y"] <= combined_center_y <= chunk_bbox["y"] + chunk_bbox["height"]
                                     ):
-                                        continue  # Skip if outside chunk area
+                                        continue
 
-                                return {
-                                    "x": span_bbox[0],
-                                    "y": span_bbox[1],
-                                    "width": max(span_bbox[2] - span_bbox[0], 50.0),
-                                    "height": max(span_bbox[3] - span_bbox[1], 10.0),
+                                # Return combined bbox for all words - validate bbox contains expected text
+                                candidate_bbox = {
+                                    "x": min(all_x0),
+                                    "y": min(all_y0),
+                                    "width": max(all_x1) - min(all_x0),
+                                    "height": max(all_y1) - min(all_y0),
                                     "page": page,
                                 }
+                                
+                                if self._validate_bbox_text(candidate_bbox, mention_text_clean, pdf_page):
+                                    return candidate_bbox
 
-            # Method 2: Fallback to direct page search
+            # Method 2: Fallback to direct page search (good for exact text matches)
             mention_variants = [
                 mention_text_clean,
                 mention_text_clean.replace(" ", ""),
@@ -694,13 +786,92 @@ class MarkdownNERProcessorDB:
                     text_instances = pdf_page.search_for(variant)
                     if text_instances:
                         rect = text_instances[0]
-                        return {
+                        
+                        # Verify within chunk area if provided
+                        if chunk_bbox:
+                            rect_center_x = (rect.x0 + rect.x1) / 2
+                            rect_center_y = (rect.y0 + rect.y1) / 2
+                            if not (
+                                chunk_bbox["x"] <= rect_center_x <= chunk_bbox["x"] + chunk_bbox["width"]
+                                and chunk_bbox["y"] <= rect_center_y <= chunk_bbox["y"] + chunk_bbox["height"]
+                            ):
+                                continue
+                        
+                        # Validate bbox contains expected text
+                        candidate_bbox = {
                             "x": rect.x0,
                             "y": rect.y0,
-                            "width": max(rect.x1 - rect.x0, 50.0),
-                            "height": max(rect.y1 - rect.y0, 10.0),
+                            "width": rect.x1 - rect.x0,
+                            "height": rect.y1 - rect.y0,
                             "page": page,
                         }
+                        
+                        if self._validate_bbox_text(candidate_bbox, mention_text_clean, pdf_page):
+                            return candidate_bbox
+
+            # Method 3: Fallback to span matching (less accurate but better than nothing)
+            text_dict = pdf_page.get_text("dict")
+            for block in text_dict.get("blocks", []):
+                if "lines" not in block:
+                    continue
+
+                for line in block["lines"]:
+                    for span in line["spans"]:
+                        span_text = span.get("text", "").strip()
+                        span_text_normalized = span_text.replace(" ", "").lower()
+
+                        if (
+                            mention_text_clean.lower() in span_text.lower()
+                            or span_text.lower() in mention_text_clean.lower()
+                            or mention_normalized == span_text_normalized
+                        ):
+                            span_bbox = span.get("bbox", [])
+                            
+                            if len(span_bbox) == 4:
+                                # If chunk bbox exists, verify this span is within it
+                                if chunk_bbox:
+                                    span_center_x = (span_bbox[0] + span_bbox[2]) / 2
+                                    span_center_y = (span_bbox[1] + span_bbox[3]) / 2
+
+                                    if not (
+                                        chunk_bbox["x"] <= span_center_x <= chunk_bbox["x"] + chunk_bbox["width"]
+                                        and chunk_bbox["y"] <= span_center_y <= chunk_bbox["y"] + chunk_bbox["height"]
+                                    ):
+                                        continue  # Skip if outside chunk area
+                                
+                                # Calculate character position within span to get more precise bbox
+                                mention_pos = span_text.lower().find(mention_text_clean.lower())
+                                if mention_pos >= 0 and len(span_text) > 0:
+                                    # Estimate bbox based on character position (proportional)
+                                    span_width = span_bbox[2] - span_bbox[0]
+                                    char_width = span_width / len(span_text) if span_text else span_width
+                                    
+                                    estimated_x0 = span_bbox[0] + (mention_pos * char_width)
+                                    estimated_x1 = estimated_x0 + (len(mention_text_clean) * char_width)
+                                    
+                                    # Validate estimated bbox contains expected text
+                                    candidate_bbox = {
+                                        "x": estimated_x0,
+                                        "y": span_bbox[1],
+                                        "width": estimated_x1 - estimated_x0,
+                                        "height": span_bbox[3] - span_bbox[1],
+                                        "page": page,
+                                    }
+                                    
+                                    if self._validate_bbox_text(candidate_bbox, mention_text_clean, pdf_page):
+                                        return candidate_bbox
+                                else:
+                                    # Fallback to full span bbox - validate it contains expected text
+                                    candidate_bbox = {
+                                        "x": span_bbox[0],
+                                        "y": span_bbox[1],
+                                        "width": span_bbox[2] - span_bbox[0],
+                                        "height": span_bbox[3] - span_bbox[1],
+                                        "page": page,
+                                    }
+                                    
+                                    if self._validate_bbox_text(candidate_bbox, mention_text_clean, pdf_page):
+                                        return candidate_bbox
 
         except Exception as e:
             if hasattr(self, "verbose") and self.verbose:
