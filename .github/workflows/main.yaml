@@ -6,6 +6,7 @@ on:
       ip:
         description: 'ip address of the production server'
         type: string
+        required: true
       domain:
         description: 'Domain of the production server'
         type: string
@@ -25,9 +26,11 @@ on:
         default: latest
 
 env:
-  SSH_PRIVATE_KEY_PROD: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
+  DEPLOY_VM_PRIVATE_SSH_KEY: ${{ secrets.DEPLOY_VM_PRIVATE_SSH_KEY }}
   GRADIENT_MAIL: ${{ secrets.GRADIENT_MAIL }}
-  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+  GH_PAT: ${{ secrets.GH_PAT }}
 
 jobs:
   production:
@@ -37,6 +40,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GH_PAT }}
 
       - name: Wait for SSH (port 22)
         run: |
@@ -50,10 +60,10 @@ jobs:
       - name: Prepare SSH key
         id: ssh
         env:
-          SSH_PRIVATE_KEY_PROD: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
+          DEPLOY_VM_PRIVATE_SSH_KEY: ${{ secrets.DEPLOY_VM_PRIVATE_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY_PROD" > ~/.ssh/id_do
+          echo "$DEPLOY_VM_PRIVATE_SSH_KEY" > ~/.ssh/id_do
           chmod 600 ~/.ssh/id_do
           echo "key_path=$HOME/.ssh/id_do" >> $GITHUB_OUTPUT
       - name: Select SSH control user
@@ -293,6 +303,8 @@ jobs:
           MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
           MICROSOFT_REDIRECT_URI: ${{ secrets.MICROSOFT_REDIRECT_URI }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GH_PAT: ${{ secrets.GH_PAT }}
 
         run: |
           set -euo pipefail
@@ -314,6 +326,12 @@ jobs:
           # Store FQDN for nginx config
           echo "FQDN=$fqdn" > fqdn.env
           scp -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" fqdn.env "$user@$ip:/home/$user/fqdn.env"
+          
+          # Configure GHCR credentials on remote server
+          ssh -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" "$user@$ip" bash -s <<REMOTE
+          set -euo pipefail
+          echo "${GH_PAT}" | sudo docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+          REMOTE
           
       - name: Remote bootstrap (extract repo, set nginx server_name)
         run: |
