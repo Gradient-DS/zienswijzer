@@ -878,6 +878,9 @@ def background_parse_document(doc_id: str, page_count: int):
         model_type="xlm-roberta",
         model_name="Davlan/xlm-roberta-base-ner-hrl",
         verbose=True,
+        use_dutch_model=True,
+        dutch_model_type="robbert",
+        dutch_model_name="pdelobelle/robbert-v2-dutch-ner",
     )
     results = processor.process(create_chunks=True)
 

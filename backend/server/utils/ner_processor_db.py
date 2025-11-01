@@ -46,6 +46,9 @@ class MarkdownNERProcessorDB:
         model_name: str = "Davlan/xlm-roberta-base-ner-hrl",
         verbose: bool = True,
         pdf_path: Optional[str] = None,
+        use_dutch_model: bool = True,
+        dutch_model_type: str = "robbert",
+        dutch_model_name: str = "pdelobelle/robbert-v2-dutch-ner",
     ):
         """
         Initialize the Markdown NER Processor with database integration.
@@ -60,6 +63,9 @@ class MarkdownNERProcessorDB:
             model_name: Specific model name
             verbose: Whether to print progress messages
             pdf_path: Optional path to corresponding PDF file (for extracting bounding boxes)
+            use_dutch_model: If True, also run a Dutch-specific NER model to catch additional entities
+            dutch_model_type: Model type for Dutch NER (default: "xlm-roberta")
+            dutch_model_name: Model name for Dutch NER (default: "Davlan/xlm-roberta-base-finetuned-dutch-ner")
         """
         self.markdown_path = Path(markdown_path)
         self.document_id = document_id
@@ -71,6 +77,9 @@ class MarkdownNERProcessorDB:
         self.verbose = verbose
         self.pdf_path = pdf_path
         self.pdf_doc = None
+        self.use_dutch_model = use_dutch_model
+        self.dutch_model_type = dutch_model_type
+        self.dutch_model_name = dutch_model_name
 
         self.full_text = None
         self.pdf_text = None
@@ -82,7 +91,6 @@ class MarkdownNERProcessorDB:
         if pdf_path and Path(pdf_path).exists():
             try:
                 import fitz  # PyMuPDF
-
                 self.pdf_doc = fitz.open(pdf_path)
                 if self.verbose:
                     self._print(f"Opened PDF: {pdf_path} ({len(self.pdf_doc)} pages)")
@@ -99,6 +107,7 @@ class MarkdownNERProcessorDB:
         if self.verbose:
             print(message)
 
+
     def _extract_pdf_text(self) -> None:
         """Extract text from PDF and store it for chunking, along with character-to-bbox mapping."""
         if not hasattr(self, "pdf_doc") or self.pdf_doc is None:
@@ -106,7 +115,6 @@ class MarkdownNERProcessorDB:
 
         try:
             import fitz  # PyMuPDF
-
             self.pdf_text = ""
             self.pdf_pages_text = []
             # Store mapping from character position to bounding box
@@ -115,52 +123,50 @@ class MarkdownNERProcessorDB:
             char_offset = 0
             for page_num in range(len(self.pdf_doc)):
                 page = self.pdf_doc[page_num]
-
+                
                 # Get text with positions for better matching
                 text_dict = page.get_text("dict")
                 page_text_from_dict = ""
-
+                
                 # Extract text with character positions and bounding boxes
                 for block in text_dict.get("blocks", []):
                     if "lines" not in block:
                         continue
-
+                    
                     for line in block["lines"]:
                         for span in line["spans"]:
                             span_text = span.get("text", "")
                             span_bbox = span.get("bbox", [])
-
+                            
                             if len(span_bbox) == 4:
                                 # Store bbox for the span (more efficient than per-character)
                                 span_start = char_offset + len(page_text_from_dict)
                                 span_end = span_start + len(span_text)
-
-                                self.char_to_bbox.append(
-                                    {
-                                        "char_index_start": span_start,
-                                        "char_index_end": span_end,
-                                        "bbox": {
-                                            "x": span_bbox[0],
-                                            "y": span_bbox[1],
-                                            "width": span_bbox[2] - span_bbox[0],
-                                            "height": span_bbox[3] - span_bbox[1],
-                                        },
-                                        "page_num": page_num + 1,
-                                        "text": span_text,
-                                    }
-                                )
-
+                                
+                                self.char_to_bbox.append({
+                                    "char_index_start": span_start,
+                                    "char_index_end": span_end,
+                                    "bbox": {
+                                        "x": span_bbox[0],
+                                        "y": span_bbox[1],
+                                        "width": span_bbox[2] - span_bbox[0],
+                                        "height": span_bbox[3] - span_bbox[1],
+                                    },
+                                    "page_num": page_num + 1,
+                                    "text": span_text,
+                                })
+                            
                             page_text_from_dict += span_text
-
+                        
                         page_text_from_dict += "\n"
-
+                    
                     page_text_from_dict += "\n"
-
+                
                 # Use the same text from dict extraction for consistency
                 self.pdf_text += page_text_from_dict
-
+                
                 char_offset += len(page_text_from_dict)
-
+                
                 self.pdf_pages_text.append(
                     {
                         "page_num": page_num + 1,  # 1-based for frontend
@@ -194,9 +200,92 @@ class MarkdownNERProcessorDB:
 
         return self.full_text
 
+    def _merge_entities(self, primary_entities: List[Dict], secondary_entities: List[Dict]) -> List[Dict]:
+        """
+        Merge entities from two models, keeping unique entities.
+        If the same entity (by text and type) is found by both models,
+        keep the one with higher confidence.
+        
+        Args:
+            primary_entities: Entities from the primary model
+            secondary_entities: Entities from the secondary model
+            
+        Returns:
+            Merged list of unique entities
+        """
+        # Create a dictionary to track unique entities by (normalized_text, label)
+        entity_dict = {}
+        
+        # Add primary entities first
+        for ent in primary_entities:
+            text = ent.get("text", "").strip().lower()
+            label = ent.get("label", "")
+            key = (text, label)
+            
+            if key not in entity_dict or ent.get("confidence", 0.0) > entity_dict[key].get("confidence", 0.0):
+                entity_dict[key] = ent
+        
+        # Add secondary entities, keeping higher confidence if duplicate
+        for ent in secondary_entities:
+            text = ent.get("text", "").strip().lower()
+            label = ent.get("label", "")
+            key = (text, label)
+            
+            if key not in entity_dict:
+                # New entity from secondary model
+                entity_dict[key] = ent
+            else:
+                # Entity exists, keep the one with higher confidence
+                existing_conf = entity_dict[key].get("confidence", 0.0)
+                new_conf = ent.get("confidence", 0.0)
+                if new_conf > existing_conf:
+                    entity_dict[key] = ent
+        
+        return list(entity_dict.values())
+    
+    def _filter_invalid_entities(self, entities: List[Dict]) -> List[Dict]:
+        """
+        Filter out invalid entities:
+        - Entities with less than 3 characters
+        - Entities that start with a lowercase letter
+        
+        Args:
+            entities: List of entity dictionaries
+            
+        Returns:
+            Filtered list of entities
+        """
+        filtered = []
+        removed_count = 0
+        
+        for ent in entities:
+            text = ent.get("text", "").strip()
+            
+            # Filter 1: Remove entities with less than 3 characters
+            if len(text) < 3:
+                removed_count += 1
+                if self.verbose:
+                    self._print(f"  [FILTER] Removed short entity: '{text}' ({len(text)} characters)")
+                continue
+            
+            # Filter 2: Remove entities that start with a lowercase letter
+            if text and text[0].islower():
+                removed_count += 1
+                if self.verbose:
+                    self._print(f"  [FILTER] Removed entity starting with lowercase: '{text}'")
+                continue
+            
+            filtered.append(ent)
+        
+        if removed_count > 0:
+            self._print(f"Filtered out {removed_count} invalid entities (short or lowercase)")
+        
+        return filtered
+ 
     def perform_ner(self) -> List[Dict]:
         """
         Perform Named Entity Recognition on the markdown text.
+        If use_dutch_model is True, also runs a Dutch-specific model and merges results.
 
         Returns:
             List of entity dictionaries with 'text', 'label', 'start', 'end', 'confidence'
@@ -206,9 +295,10 @@ class MarkdownNERProcessorDB:
 
         self._print("=" * 60)
         self._print("Performing Named Entity Recognition...")
-        self._print(f"Model type: {self.model_type}, Model name: {self.model_name}")
+        self._print(f"Primary model: {self.model_type} ({self.model_name})")
 
         try:
+            # Run primary model
             entities = extract_entities_from_text(
                 self.full_text,
                 entity_types=self.entity_types,
@@ -216,12 +306,106 @@ class MarkdownNERProcessorDB:
                 model_type=self.model_type,
                 model_name=self.model_name,
             )
+            
+            primary_count = len(entities)
+            self._print(f"Primary model found {primary_count} entities")
 
-            # Filter out very short entities and None values
-            entities = [ent for ent in entities if ent is not None and len(ent.get("text", "").strip()) > 2]
+            # Run Dutch model(s) if enabled
+            if self.use_dutch_model:
+                # Run the primary Dutch model
+                self._print(f"\nRunning Dutch-specific model: {self.dutch_model_type} ({self.dutch_model_name})")
+                try:
+                    dutch_entities = extract_entities_from_text(
+                        self.full_text,
+                        entity_types=self.entity_types,
+                        min_confidence=self.min_confidence,
+                        model_type=self.dutch_model_type,
+                        model_name=self.dutch_model_name,
+                    )
+                    
+                    dutch_count = len(dutch_entities)
+                    self._print(f"Dutch model found {dutch_count} entities")
+                    
+                    # Merge entities from both models
+                    merged_entities = self._merge_entities(entities, dutch_entities)
+                    merged_count = len(merged_entities)
+                    new_entities_count = merged_count - primary_count
+                    
+                    if new_entities_count > 0:
+                        self._print(f"Merged results: {merged_count} total entities ({new_entities_count} additional from Dutch model)")
+                    else:
+                        self._print(f"Merged results: {merged_count} total entities (no new entities from Dutch model)")
+                    
+                    entities = merged_entities
+                    
+                except Exception as e:
+                    self._print(f"Warning: Could not run Dutch model: {e}")
+                    self._print("Continuing with primary model results only...")
+                    if self.verbose:
+                        import traceback
+                        traceback.print_exc()
+            
+            # Also run NER on PDF text to catch entities that might differ from markdown
+            # This helps when the PDF text extraction differs from markdown parsing
+            if self.pdf_text and self.use_dutch_model:
+                self._print("\nAlso running NER on PDF text to catch additional entities...")
+                try:
+                    pdf_entities = extract_entities_from_text(
+                        self.pdf_text,
+                        entity_types=self.entity_types,
+                        min_confidence=self.min_confidence,
+                        model_type=self.model_type,
+                        model_name=self.model_name,
+                    )
+                    
+                    # Also run Dutch model on PDF text
+                    pdf_dutch_entities = extract_entities_from_text(
+                        self.pdf_text,
+                        entity_types=self.entity_types,
+                        min_confidence=self.min_confidence,
+                        model_type=self.dutch_model_type,
+                        model_name=self.dutch_model_name,
+                    )
+                    
+                    # Merge PDF entities
+                    pdf_all_entities = self._merge_entities(pdf_entities, pdf_dutch_entities)
+                    pdf_count = len(pdf_all_entities)
+                    self._print(f"PDF text NER found {pdf_count} entities")
+                    
+                    # Merge with markdown entities
+                    merged_entities = self._merge_entities(entities, pdf_all_entities)
+                    merged_count = len(merged_entities)
+                    new_entities_count = merged_count - len(entities)
+                    
+                    if new_entities_count > 0:
+                        self._print(f"Added {new_entities_count} additional entities from PDF text NER")
+                        entities = merged_entities
+                    else:
+                        self._print("No additional entities found in PDF text")
+                        
+                except Exception as e:
+                    self._print(f"Warning: Could not run NER on PDF text: {e}")
+                    if self.verbose:
+                        import traceback
+                        traceback.print_exc()
+
+            # Apply filtering to remove invalid entities
+            initial_count = len(entities)
+            self._print("\nApplying entity filters...")
+            entities = self._filter_invalid_entities(entities)
+            
+            filtered_count = initial_count - len(entities)
+            if filtered_count > 0:
+                self._print(f"Total filtered: {filtered_count} entities removed ({initial_count} -> {len(entities)})")
 
             self.entities = entities
-            self._print(f"Found {len(entities)} entities")
+            self._print(f"\nTotal entities after filtering: {len(entities)}")
+            
+            # Debug: Print some example entities for verification
+            if self.verbose and entities:
+                self._print(f"\nSample entities found (first 10):")
+                for i, ent in enumerate(entities[:10]):
+                    self._print(f"  {i+1}. '{ent.get('text', '')}' [{ent.get('label', '')}] (confidence: {ent.get('confidence', 0.0):.2f})")
 
             return entities
 
@@ -332,8 +516,7 @@ class MarkdownNERProcessorDB:
             Dictionary with 'created', 'skipped', 'total' counts
         """
         if not self.entities:
-            self._print("No entities found.")
-            return {"created": 0, "skipped": 0, "total": 0}
+            raise ValueError("No entities found. Run perform_ner() first.")
 
         # Initialize database
         self._print("\nInitializing database...")
@@ -385,11 +568,116 @@ class MarkdownNERProcessorDB:
             except Exception as e:
                 self._print(f"  [✗] Error creating {name}: {e}")
 
+        # Remove stakeholders that are contained in longer stakeholder names
+        self._remove_contained_stakeholders()
+
         # Summary
         result = {"created": created_count, "skipped": skipped_count, "total": len(unique_stakeholders)}
 
         self._print_summary(result)
         return result
+    
+    def _remove_contained_stakeholders(self):
+        """
+        Remove stakeholders whose names are contained within longer stakeholder names of the same type.
+        For example, if "Peter van Laar" is contained in "Peter van Laarhoven", delete "Peter van Laar".
+        
+        This handles cases where NER models detect partial names.
+        """
+        self._print("\nChecking for contained stakeholders...")
+        
+        # Get all stakeholders from database
+        all_stakeholders = get_stakeholders()
+        
+        if len(all_stakeholders) < 2:
+            return  # Need at least 2 stakeholders to compare
+        
+        # Group stakeholders by type
+        stakeholders_by_type = {}
+        for stakeholder in all_stakeholders:
+            stype = stakeholder.get("type")
+            if stype not in stakeholders_by_type:
+                stakeholders_by_type[stype] = []
+            stakeholders_by_type[stype].append(stakeholder)
+        
+        deleted_count = 0
+        deleted_mentions_count = 0
+        
+        # Check each type separately
+        for stype, stakeholders in stakeholders_by_type.items():
+            if len(stakeholders) < 2:
+                continue
+            
+            # Sort by length (longest first) so we check shorter names against longer ones
+            stakeholders_sorted = sorted(stakeholders, key=lambda s: len(s.get("name", "")), reverse=True)
+            
+            for i, shorter_stakeholder in enumerate(stakeholders_sorted):
+                shorter_name = shorter_stakeholder.get("name", "").strip()
+                shorter_id = shorter_stakeholder.get("id")
+                
+                if not shorter_name or not shorter_id:
+                    continue
+                
+                # Check if this name is contained in any longer stakeholder name
+                is_contained = False
+                containing_stakeholder = None
+                
+                for j, longer_stakeholder in enumerate(stakeholders_sorted):
+                    if i == j:  # Skip self
+                        continue
+                    
+                    longer_name = longer_stakeholder.get("name", "").strip()
+                    longer_id = longer_stakeholder.get("id")
+                    
+                    # Skip if same length or shorter
+                    if len(longer_name) <= len(shorter_name):
+                        continue
+                    
+                    # Check if shorter name is contained in longer name (case-insensitive)
+                    # Also check that they're not just at word boundaries - they should be proper substrings
+                    shorter_lower = shorter_name.lower()
+                    longer_lower = longer_name.lower()
+                    
+                    if shorter_lower in longer_lower:
+                        # Additional check: make sure the shorter name appears as a complete word/phrase
+                        # For example, "Peter van Laar" should be in "Peter van Laarhoven"
+                        # but we want to be careful about false positives
+                        is_contained = True
+                        containing_stakeholder = longer_stakeholder
+                        break
+                
+                if is_contained and containing_stakeholder:
+                    # Delete the shorter stakeholder
+                    from db.database import get_connection
+                    
+                    with get_connection() as connection:
+                        # Delete chunk-stakeholder records for the shorter stakeholder
+                        cursor = connection.execute(
+                            "DELETE FROM ChunkStakeholders WHERE stakeholder_id = ?",
+                            (shorter_id,)
+                        )
+                        mentions_deleted = cursor.rowcount
+                        deleted_mentions_count += mentions_deleted
+                        
+                        # Delete the shorter stakeholder
+                        connection.execute(
+                            "DELETE FROM Stakeholders WHERE id = ?",
+                            (shorter_id,)
+                        )
+                        deleted_count += 1
+                        connection.commit()
+                        
+                        # Remove from cache
+                        key = (shorter_name, stype)
+                        if key in self.stakeholder_ids:
+                            del self.stakeholder_ids[key]
+                        
+                        if self.verbose:
+                            containing_name = containing_stakeholder.get("name", "")
+                            self._print(f"  [DELETE] Removed '{shorter_name}' (contained in '{containing_name}', both {stype}) - deleted {mentions_deleted} mentions")
+        
+        if deleted_count > 0:
+            self._print(f"Removed {deleted_count} contained stakeholders and {deleted_mentions_count} chunk-stakeholder links")
 
     def _split_text_into_chunks(self, text: str, chunk_size: int = 500) -> List[Dict]:
         """
@@ -446,7 +734,7 @@ class MarkdownNERProcessorDB:
     ) -> Optional[Dict]:
         """
         Get bounding box for a chunk from PDF using character positions.
-
+        
         Uses the character-to-bbox mapping created during PDF text extraction.
         """
         if not hasattr(self, "pdf_doc") or self.pdf_doc is None:
@@ -462,18 +750,19 @@ class MarkdownNERProcessorDB:
             for entry in self.char_to_bbox:
                 entry_start = entry.get("char_index_start", entry.get("char_index", 0))
                 entry_end = entry.get("char_index_end", entry_start + 1)
-
+                
                 # Check if span overlaps with chunk
-                if entry_start < chunk_end and entry_end > chunk_start and (page is None or entry["page_num"] == page):
+                if (entry_start < chunk_end and entry_end > chunk_start and 
+                    (page is None or entry["page_num"] == page)):
                     chunk_bboxes.append(entry["bbox"])
-
+            
             if chunk_bboxes:
                 # Calculate bounding box encompassing all spans in chunk
                 min_x = min(bbox["x"] for bbox in chunk_bboxes)
                 min_y = min(bbox["y"] for bbox in chunk_bboxes)
                 max_x = max(bbox["x"] + bbox["width"] for bbox in chunk_bboxes)
                 max_y = max(bbox["y"] + bbox["height"] for bbox in chunk_bboxes)
-
+                
                 return {
                     "x": min_x,
                     "y": min_y,
@@ -583,10 +872,10 @@ class MarkdownNERProcessorDB:
             x_offset = (int(chunk_hash[:4], 16) % 400) + 50  # 50-450
             y_offset = (int(chunk_hash[4:8], 16) % 600) + 50  # 50-650
             chunk_bbox = {
-                "x": float(x_offset),
-                "y": float(y_offset),  # Page-relative coordinates (no offset)
-                "width": 400.0,
-                "height": 100.0,
+                "x": 0,
+                "y": 0,  # Offset by page
+                "width": 0,
+                "height": 0,
             }
 
         # Create chunk record using database function
@@ -603,21 +892,38 @@ class MarkdownNERProcessorDB:
 
         return chunk_id
 
+<<<<<<< HEAD
     def _validate_bbox_text(self, bbox: Dict, expected_text: str, pdf_page: any) -> bool:
         """
         Validate that a bounding box contains the expected text and is not empty.
 
+=======
+    def _validate_bbox_text(
+        self, bbox: Dict, expected_text: str, pdf_page: any
+    ) -> bool:
+        """
+        Validate that a bounding box contains the expected text and is not empty.
+        
+>>>>>>> origin/main
         Args:
             bbox: Bounding box dict with x, y, width, height
             expected_text: The expected entity text
             pdf_page: PyMuPDF page object
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> origin/main
         Returns:
             True if bbox contains expected text, False otherwise
         """
         try:
             import fitz  # PyMuPDF
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> origin/main
             # Create a rectangle from the bbox
             rect = fitz.Rect(
                 bbox["x"],
@@ -625,6 +931,7 @@ class MarkdownNERProcessorDB:
                 bbox["x"] + bbox["width"],
                 bbox["y"] + bbox["height"],
             )
+<<<<<<< HEAD
 
             # Extract text from within the rectangle
             extracted_text = pdf_page.get_textbox(rect).strip()
@@ -637,6 +944,20 @@ class MarkdownNERProcessorDB:
             extracted_normalized = extracted_text.replace(" ", "").lower()
             expected_normalized = expected_text.strip().replace(" ", "").lower()
 
+=======
+            
+            # Extract text from within the rectangle
+            extracted_text = pdf_page.get_textbox(rect).strip()
+            
+            # Check if bbox is in empty area
+            if not extracted_text:
+                return False
+            
+            # Normalize both texts for comparison (remove spaces, convert to lowercase)
+            extracted_normalized = extracted_text.replace(" ", "").lower()
+            expected_normalized = expected_text.strip().replace(" ", "").lower()
+            
+>>>>>>> origin/main
             # Check if extracted text matches or contains expected text
             # Also check reverse (expected contains extracted) to handle partial matches
             if (
@@ -644,6 +965,7 @@ class MarkdownNERProcessorDB:
                 or expected_normalized in extracted_normalized
                 or extracted_normalized in expected_normalized
             ):
+<<<<<<< HEAD
                 # Additional check: if we're looking for "NVWA", extracted shouldn't be just "VW"
                 # Require at least 70% of expected text length to prevent partial matches
                 min_length = max(2, int(len(expected_normalized) * 0.7))
@@ -652,17 +974,33 @@ class MarkdownNERProcessorDB:
 
             return False
 
+=======
+                # Additional check: require at least 70% of expected text length to prevent partial matches
+                min_length = max(2, int(len(expected_normalized) * 0.7))
+                if len(extracted_normalized) >= min_length:
+                    return True
+            
+            return False
+            
+>>>>>>> origin/main
         except Exception as e:
             if hasattr(self, "verbose") and self.verbose:
                 self._print(f"  Warning: Error validating bbox text: {e}")
             return False
 
+<<<<<<< HEAD
     def _get_entity_bbox_from_pdf(
         self, mention_text: str, page: int, chunk_text: Optional[str] = None, chunk_start: Optional[int] = None
     ) -> Optional[Dict]:
         """
         Get bounding box for an entity mention from PDF using PyMuPDF.
 
+=======
+    def _get_entity_bbox_from_pdf(self, mention_text: str, page: int, chunk_text: Optional[str] = None, chunk_start: Optional[int] = None) -> Optional[Dict]:
+        """
+        Get bounding box for an entity mention from PDF using PyMuPDF.
+        
+>>>>>>> origin/main
         This finds the exact bounding box of the entity text in the PDF using word-level bboxes.
         If chunk_text and chunk_start are provided, it searches within that chunk's region first.
         Validates that the bbox contains the expected text and is not empty.
@@ -719,13 +1057,18 @@ class MarkdownNERProcessorDB:
                                     and chunk_bbox["y"] <= word_center_y <= chunk_bbox["y"] + chunk_bbox["height"]
                                 ):
                                     continue
+<<<<<<< HEAD
 
+=======
+                            
+>>>>>>> origin/main
                             # Found exact word match - validate bbox contains expected text
                             candidate_bbox = {
                                 "x": word_bbox[0],
                                 "y": word_bbox[1],
                                 "width": word_bbox[2] - word_bbox[0],
                                 "height": word_bbox[3] - word_bbox[1],
+<<<<<<< HEAD
                                 "page": page,
                             }
 
@@ -750,15 +1093,44 @@ class MarkdownNERProcessorDB:
                                 all_x1 = [w[2] for w in matched_words]
                                 all_y1 = [w[3] for w in matched_words]
 
+=======
+                            }
+                            
+                            if self._validate_bbox_text(candidate_bbox, mention_text_clean, pdf_page):
+                                return candidate_bbox
+                    else:
+                        # Multi-word entity: find consecutive words matching the entity
+                        if i + len(mention_words) <= len(words):
+                            matched_words = []
+                            for j, expected_word in enumerate(mention_words):
+                                if i + j < len(words):
+                                    check_word = words[i + j][4] if len(words[i + j]) > 4 else ""
+                                    if check_word.lower() == expected_word.lower():
+                                        matched_words.append(words[i + j])
+                                    else:
+                                        break
+                            
+                            if len(matched_words) == len(mention_words):
+                                # All words matched, calculate combined bbox
+                                all_x0 = [w[0] for w in matched_words]
+                                all_y0 = [w[1] for w in matched_words]
+                                all_x1 = [w[2] for w in matched_words]
+                                all_y1 = [w[3] for w in matched_words]
+
+>>>>>>> origin/main
                                 # Verify within chunk area if provided
                                 if chunk_bbox:
                                     combined_center_x = (min(all_x0) + max(all_x1)) / 2
                                     combined_center_y = (min(all_y0) + max(all_y1)) / 2
                                     if not (
                                         chunk_bbox["x"] <= combined_center_x <= chunk_bbox["x"] + chunk_bbox["width"]
+<<<<<<< HEAD
                                         and chunk_bbox["y"]
                                         <= combined_center_y
                                         <= chunk_bbox["y"] + chunk_bbox["height"]
+=======
+                                        and chunk_bbox["y"] <= combined_center_y <= chunk_bbox["y"] + chunk_bbox["height"]
+>>>>>>> origin/main
                                     ):
                                         continue
 
@@ -768,12 +1140,21 @@ class MarkdownNERProcessorDB:
                                     "y": min(all_y0),
                                     "width": max(all_x1) - min(all_x0),
                                     "height": max(all_y1) - min(all_y0),
+<<<<<<< HEAD
                                     "page": page,
+=======
+>>>>>>> origin/main
                                 }
-
+                                
                                 if self._validate_bbox_text(candidate_bbox, mention_text_clean, pdf_page):
                                     return candidate_bbox
 
+<<<<<<< HEAD
+                                if self._validate_bbox_text(candidate_bbox, mention_text_clean, pdf_page):
+                                    return candidate_bbox
+
+=======
+>>>>>>> origin/main
             # Method 2: Fallback to direct page search (good for exact text matches)
             mention_variants = [
                 mention_text_clean,
@@ -786,7 +1167,11 @@ class MarkdownNERProcessorDB:
                     text_instances = pdf_page.search_for(variant)
                     if text_instances:
                         rect = text_instances[0]
+<<<<<<< HEAD
 
+=======
+                        
+>>>>>>> origin/main
                         # Verify within chunk area if provided
                         if chunk_bbox:
                             rect_center_x = (rect.x0 + rect.x1) / 2
@@ -796,15 +1181,76 @@ class MarkdownNERProcessorDB:
                                 and chunk_bbox["y"] <= rect_center_y <= chunk_bbox["y"] + chunk_bbox["height"]
                             ):
                                 continue
+<<<<<<< HEAD
 
+=======
+                        
+>>>>>>> origin/main
                         # Validate bbox contains expected text
                         candidate_bbox = {
                             "x": rect.x0,
                             "y": rect.y0,
                             "width": rect.x1 - rect.x0,
                             "height": rect.y1 - rect.y0,
+<<<<<<< HEAD
                             "page": page,
+=======
+>>>>>>> origin/main
                         }
+                        
+                        if self._validate_bbox_text(candidate_bbox, mention_text_clean, pdf_page):
+                            return candidate_bbox
+
+            # Method 3: Fallback to span matching (less accurate but better than nothing)
+            text_dict = pdf_page.get_text("dict")
+            for block in text_dict.get("blocks", []):
+                if "lines" not in block:
+                    continue
+
+                for line in block["lines"]:
+                    for span in line["spans"]:
+                        span_text = span.get("text", "").strip()
+                        span_text_normalized = span_text.replace(" ", "").lower()
+
+                        if (
+                            mention_text_clean.lower() in span_text.lower()
+                            or span_text.lower() in mention_text_clean.lower()
+                            or mention_normalized == span_text_normalized
+                        ):
+                            span_bbox = span.get("bbox", [])
+                            
+                            if len(span_bbox) == 4:
+                                # If chunk bbox exists, verify this span is within it
+                                if chunk_bbox:
+                                    span_center_x = (span_bbox[0] + span_bbox[2]) / 2
+                                    span_center_y = (span_bbox[1] + span_bbox[3]) / 2
+
+                                    if not (
+                                        chunk_bbox["x"] <= span_center_x <= chunk_bbox["x"] + chunk_bbox["width"]
+                                        and chunk_bbox["y"] <= span_center_y <= chunk_bbox["y"] + chunk_bbox["height"]
+                                    ):
+                                        continue  # Skip if outside chunk area
+                                
+                                # Calculate character position within span to get more precise bbox
+                                mention_pos = span_text.lower().find(mention_text_clean.lower())
+                                if mention_pos >= 0 and len(span_text) > 0:
+                                    # Estimate bbox based on character position (proportional)
+                                    span_width = span_bbox[2] - span_bbox[0]
+                                    char_width = span_width / len(span_text) if span_text else span_width
+                                    
+                                    estimated_x0 = span_bbox[0] + (mention_pos * char_width)
+                                    estimated_x1 = estimated_x0 + (len(mention_text_clean) * char_width)
+                                    
+                                    # Validate estimated bbox contains expected text
+                                    candidate_bbox = {
+                                        "x": estimated_x0,
+                                        "y": span_bbox[1],
+                                        "width": estimated_x1 - estimated_x0,
+                                        "height": span_bbox[3] - span_bbox[1],
+                                    }
+                                    
+                                    if self._validate_bbox_text(candidate_bbox, mention_text_clean, pdf_page):
+                                        return candidate_bbox
 
                         if self._validate_bbox_text(candidate_bbox, mention_text_clean, pdf_page):
                             return candidate_bbox
@@ -916,11 +1362,10 @@ class MarkdownNERProcessorDB:
             x_offset = (int(mention_hash[:4], 16) % 400) + 100  # 100-500
             y_offset = (int(mention_hash[4:8], 16) % 600) + 100  # 100-700
             mention_bbox = {
-                "x": float(x_offset),
-                "y": float(y_offset),  # Page-relative coordinates (no offset)
-                "width": max(len(mention_text) * 8.0, 80.0),  # Width based on text length
-                "height": 20.0,
-                "page": page,
+                "x": 0,
+                "y": 0,  # Offset by page
+                "width": 0,  # Width based on text length
+                "height": 0,
             }
 
         # Check for overlapping bounding boxes with existing mentions
@@ -933,8 +1378,9 @@ class MarkdownNERProcessorDB:
                     existing_bbox = json.loads(existing_bbox)
 
                 # Check if same stakeholder and overlapping bbox (same entity mention)
-                if existing.get("stakeholder_id") == stakeholder_id and self._bboxes_overlap(
-                    mention_bbox, existing_bbox, overlap_threshold=0.5
+                if (
+                    existing.get("stakeholder_id") == stakeholder_id
+                    and self._bboxes_overlap(mention_bbox, existing_bbox, overlap_threshold=0.5)
                 ):
                     if self.verbose:
                         self._print(
@@ -1010,58 +1456,21 @@ class MarkdownNERProcessorDB:
             for page_info in self.pdf_pages_text:
                 page_text_len = len(page_info["text"])
                 if chunk_start < current_pos + page_text_len:
-                    if self.verbose and False:  # Disable verbose debug per chunk
-                        self._print(
-                            f"    Chunk [{chunk_start}:{chunk_end}] → Page {page_info['page_num']} (page text range: [{current_pos}:{current_pos + page_text_len}])"
-                        )
                     return page_info["page_num"]
                 current_pos += page_text_len + 1  # +1 for newline
 
-            # If we're here, chunk is beyond all pages - assign to last page
-            last_page = self.pdf_pages_text[-1]["page_num"] if self.pdf_pages_text else 1
-            if self.verbose:
-                self._print(
-                    f"    Warning: Chunk [{chunk_start}:{chunk_end}] exceeds PDF text length, assigning to last page {last_page}"
-                )
-            return last_page
+            return self.pdf_pages_text[-1]["page_num"] if self.pdf_pages_text else 1
 
         # Create chunk records in database
         chunk_records = {}  # chunk index -> {'chunk_id': ..., 'chunk': ..., 'page': ...}
 
         self._print("\nCreating chunks in database...")
-        self._print(
-            f"  PDF text available: {bool(self.pdf_text)}, Length: {len(self.pdf_text) if self.pdf_text else 0}"
-        )
-        self._print(
-            f"  PDF pages text available: {bool(self.pdf_pages_text)}, Pages: {len(self.pdf_pages_text) if self.pdf_pages_text else 0}"
-        )
-
-        # Debug: show page text length distribution
-        if self.pdf_pages_text:
-            self._print(
-                f"  Page text lengths: {[len(p['text']) for p in self.pdf_pages_text[:5]]}{'...' if len(self.pdf_pages_text) > 5 else ''}"
-            )
-
-        page_distribution = {}
         for i, chunk in enumerate(text_chunks):
-            # Use PDF text for page detection if available
-            if self.pdf_text and self.pdf_pages_text:
-                chunk_page = get_chunk_page(chunk.get("start", 0), chunk.get("end", 0))
-            else:
-                chunk_page = 1
-
+            chunk_page = get_chunk_page(chunk.get("start", 0), chunk.get("end", 0)) if self.pdf_text else 1
             chunk_id = self._create_chunk(self.document_id, chunk, page=chunk_page)
             chunk_records[i] = {"chunk_id": chunk_id, "chunk": chunk, "page": chunk_page}
 
-            # Track page distribution
-            page_distribution[chunk_page] = page_distribution.get(chunk_page, 0) + 1
-
-            # Debug: show first 5 chunks
-            if i < 5:
-                self._print(f"    Chunk {i}: pos [{chunk.get('start', 0)}:{chunk.get('end', 0)}] → Page {chunk_page}")
-
         self._print(f"  ✓ Created {len(chunk_records)} chunks in database")
-        self._print(f"  Page distribution: {page_distribution}")
 
         # Map ALL entity occurrences to chunks and create ChunkStakeholder records
         self._print("\nMapping entities to chunks and creating ChunkStakeholder records...")
@@ -1070,6 +1479,12 @@ class MarkdownNERProcessorDB:
         overlap_skipped = 0
 
         filtered_entities = self._filter_entities_by_stakeholder_type()
+        
+        # Track entities that only appear in lowercase - these should be filtered out
+        entities_with_lowercase_only = set()
+
+        # Debug: Track entities that are being checked
+        entities_not_found_in_chunks = []
 
         for entity in filtered_entities:
             entity_text = entity.get("text", "").strip()
@@ -1084,8 +1499,18 @@ class MarkdownNERProcessorDB:
 
             if not stakeholder_id:
                 skipped_count += 1
+                if self.verbose and entity_text.lower() in ["anja koeleman", "koeleman"]:
+                    self._print(f"  [DEBUG] Entity '{entity_text}' found by NER but stakeholder_id not found (label: {ner_label}, type: {stakeholder_type})")
                 continue
 
+            # Track if entity was found in any chunk
+            entity_found_in_chunk = False
+            # Track mentions across all chunks for this entity
+            found_valid_mention_for_entity = False
+            found_lowercase_mention_for_entity = False
+            lowercase_mention_count = 0
+            valid_mention_count = 0
+            
             # Find all chunks that contain this entity text
             for i, chunk_record in chunk_records.items():
                 chunk = chunk_record["chunk"]
@@ -1096,10 +1521,10 @@ class MarkdownNERProcessorDB:
                 chunk_text_lower = chunk_text.lower()
 
                 if entity_text_lower in chunk_text_lower:
+                    entity_found_in_chunk = True
                     # Get existing mentions for this chunk to check overlaps
                     existing_mentions = get_chunk_stakeholders(chunk_record["chunk_id"])
-
-                    # Find the actual position in the chunk (preserve original case)
+                    
                     if entity_text in chunk_text:
                         # Find all occurrences in this chunk
                         start_idx = 0
@@ -1108,12 +1533,31 @@ class MarkdownNERProcessorDB:
                             if pos == -1:
                                 break
 
+                            # Check the actual mention text in the chunk
+                            mention_text = chunk_text[pos:pos + len(entity_text)]
+                            
+                            # Filter: Skip if mention is short (< 3 chars) or starts with lowercase
+                            if len(mention_text) < 3:
+                                start_idx = pos + 1
+                                continue
+                            
+                            if mention_text and mention_text[0].islower():
+                                # Track lowercase mention for this entity
+                                found_lowercase_mention_for_entity = True
+                                lowercase_mention_count += 1
+                                start_idx = pos + 1
+                                continue
+                            
+                            # Valid mention (capitalized and >= 3 chars)
+                            found_valid_mention_for_entity = True
+                            valid_mention_count += 1
+                            
                             # Create a ChunkStakeholder for each occurrence
                             created = self._create_chunk_stakeholder(
                                 chunk_id=chunk_record["chunk_id"],
                                 stakeholder_id=stakeholder_id,
                                 entity=entity,
-                                mention_text=entity_text,
+                                mention_text=mention_text,
                                 page=chunk_record["page"],
                                 existing_mentions=existing_mentions,
                                 chunk_text=chunk["text"],
@@ -1142,6 +1586,21 @@ class MarkdownNERProcessorDB:
                         if pos != -1:
                             # Extract the actual text from chunk (preserving original case)
                             mention_text = chunk_text[pos : pos + len(entity_text)]
+                            
+                            # Filter: Skip if mention is short (< 3 chars)
+                            if len(mention_text) < 3:
+                                continue
+                            
+                            if mention_text and mention_text[0].islower():
+                                # Track lowercase mention for this entity
+                                found_lowercase_mention_for_entity = True
+                                lowercase_mention_count += 1
+                                continue
+                            
+                            # Valid mention (capitalized and >= 3 chars)
+                            found_valid_mention_for_entity = True
+                            valid_mention_count += 1
+                            
                             created = self._create_chunk_stakeholder(
                                 chunk_id=chunk_record["chunk_id"],
                                 stakeholder_id=stakeholder_id,
@@ -1152,13 +1611,103 @@ class MarkdownNERProcessorDB:
                                 chunk_text=chunk["text"],
                                 chunk_start=chunk.get("start", 0),
                             )
-
+                            
                             if created:
                                 cs_count += 1
                             else:
                                 overlap_skipped += 1
+            
+            # After checking all chunks for this entity, if we found ANY lowercase mentions, mark for removal
+            # Real entities should always be capitalized - if we see lowercase, it's likely a false positive
+            # (like "ver" from "over" or "verder")
+            if found_lowercase_mention_for_entity:
+                entities_with_lowercase_only.add(entity_text)
+                if self.verbose:
+                    self._print(f"  [FILTER] Entity '{entity_text}' has lowercase mentions ({lowercase_mention_count} lowercase, {valid_mention_count} capitalized) - will be removed")
+            
+            # Track entities that weren't found in any chunk
+            if not entity_found_in_chunk:
+                entities_not_found_in_chunks.append({
+                    "text": entity_text,
+                    "type": stakeholder_type,
+                    "label": ner_label,
+                })
+                if self.verbose and entity_text.lower() in ["anja koeleman", "koeleman"]:
+                    self._print(f"  [DEBUG] Entity '{entity_text}' (stakeholder_id: {stakeholder_id}) not found in any PDF chunk")
 
         self._print(f"\n✓ Created {cs_count} ChunkStakeholder records")
+        
+        # Report and delete stakeholders for entities that only appeared in lowercase
+        if entities_with_lowercase_only:
+            self._print(f"  [!] Found {len(entities_with_lowercase_only)} entities that only appear in lowercase (will delete stakeholders)")
+            if self.verbose:
+                self._print(f"  Entities with lowercase-only mentions (first 10):")
+                for ent in list(entities_with_lowercase_only)[:10]:
+                    self._print(f"    - '{ent}'")
+            
+            # Delete stakeholders and their chunk-stakeholder links for these entities
+            deleted_stakeholders = 0
+            deleted_mentions = 0
+            
+            for entity_text in entities_with_lowercase_only:
+                # Get stakeholder type for this entity
+                # We need to find it from the filtered_entities
+                entity_obj = None
+                for ent in filtered_entities:
+                    if ent.get("text", "").strip() == entity_text:
+                        entity_obj = ent
+                        break
+                
+                if entity_obj:
+                    ner_label = entity_obj.get("label", "")
+                    stakeholder_type = self.map_ner_label_to_stakeholder_type(ner_label)
+                    stakeholder_id = self._get_stakeholder_id(entity_text, stakeholder_type)
+                    
+                    if stakeholder_id:
+                        # Delete chunk-stakeholder links
+                        from db.database import get_connection
+                        with get_connection() as connection:
+                            # Delete chunk-stakeholder records
+                            cursor = connection.execute(
+                                "DELETE FROM ChunkStakeholders WHERE stakeholder_id = ?",
+                                (stakeholder_id,)
+                            )
+                            deleted_mentions += cursor.rowcount
+                            
+                            # Delete stakeholder
+                            connection.execute(
+                                "DELETE FROM Stakeholders WHERE id = ?",
+                                (stakeholder_id,)
+                            )
+                            deleted_stakeholders += 1
+                            connection.commit()
+                            
+                            # Remove from cache
+                            if (entity_text, stakeholder_type) in self.stakeholder_ids:
+                                del self.stakeholder_ids[(entity_text, stakeholder_type)]
+            
+            if deleted_stakeholders > 0:
+                self._print(f"  Deleted {deleted_stakeholders} stakeholders and {deleted_mentions} chunk-stakeholder links for lowercase-only entities")
+            
+            # Remove these entities from self.entities
+            filtered_entity_list = []
+            for ent in self.entities:
+                ent_text = ent.get("text", "").strip()
+                if ent_text not in entities_with_lowercase_only:
+                    filtered_entity_list.append(ent)
+            
+            removed_count = len(self.entities) - len(filtered_entity_list)
+            if removed_count > 0:
+                self._print(f"  Removed {removed_count} entities with lowercase-only mentions from entity list")
+                self.entities = filtered_entity_list
+        
+        # Report entities not found in chunks
+        if entities_not_found_in_chunks:
+            self._print(f"  [!] {len(entities_not_found_in_chunks)} entities were found by NER but not found in any PDF chunks")
+            if self.verbose:
+                self._print(f"  Entities not found in chunks (first 10):")
+                for ent in entities_not_found_in_chunks[:10]:
+                    self._print(f"    - '{ent['text']}' ({ent['type']}, label: {ent['label']})")
         if skipped_count > 0:
             self._print(f"  [!] Skipped {skipped_count} entities (stakeholder not found in database)")
         if overlap_skipped > 0:
@@ -1241,3 +1790,4 @@ class MarkdownNERProcessorDB:
                 self.pdf_doc.close()
             except:
                 pass
+
