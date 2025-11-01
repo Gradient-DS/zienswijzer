@@ -11,12 +11,45 @@ export const useDocument = (documentId: string | undefined, caseId?: string | un
                 params: caseId ? { case_id: caseId } : {}
             });
             const document = res.data.document || res.data;
-            return {
+            const processedDoc = {
                 ...document,
                 chunks: document.chunks?.map(transformChunkDetail) || [],
             } as Document;
+
+            // Debug logging
+            if (import.meta.env.DEV) {
+                console.log('[useDocument] Fetched document:', {
+                    id: documentId?.substring(0, 8),
+                    parse_status: processedDoc.parse_status,
+                    page_count: processedDoc.page_count,
+                    chunks_count: processedDoc.chunks?.length || 0
+                });
+            }
+
+            return processedDoc;
         },
         enabled: !!documentId,
+        refetchInterval: (query) => {
+            const data = query.state.data;
+
+            // Stop polling if status is explicitly failed
+            if (data?.parse_status === 'failed') {
+                return false;
+            }
+
+            // Stop polling if we have chunks (meaning NER processing is done)
+            // Regardless of parse_status (backend uses both "parsed" and "completed")
+            const hasProcessedChunks = data?.chunks && data.chunks.length > 0;
+
+            if (hasProcessedChunks) {
+                return false; // Chunks are ready, stop polling
+            }
+
+            // Continue polling if:
+            // - Document is pending/processing (no chunks yet)
+            // - Document has page_count but no chunks yet (PDF parsed, NER not done)
+            return 2000;
+        },
     });
 };
 

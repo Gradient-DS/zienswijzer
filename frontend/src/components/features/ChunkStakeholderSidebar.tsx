@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { X, Trash2, ArrowDown, ArrowUp, ArrowRight, Check } from 'lucide-react';
+import { X, Trash2, ArrowDown, ArrowUp, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { useVerifyMention, useRemoveMention, useBulkAcceptMentions } from '@/api/verification';
 import { useDocumentCompletionStatus } from '@/api/cases';
 import type { ChunkDetail, StakeholderMention } from '@/types';
@@ -20,6 +20,7 @@ interface ChunkStakeholderSidebarProps {
     onNextDocument?: () => void;
     allDocuments?: Array<{ id: string; chunks?: ChunkDetail[] }>;
     onNavigateToNextStep?: () => void;
+    isDocumentProcessing?: boolean;
 }
 
 
@@ -125,6 +126,7 @@ export function ChunkStakeholderSidebar({
     onNextDocument,
     allDocuments,
     onNavigateToNextStep,
+    isDocumentProcessing = false,
 }: ChunkStakeholderSidebarProps) {
     const sidebarRef = useRef<HTMLDivElement>(null);
     const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -142,11 +144,23 @@ export function ChunkStakeholderSidebar({
             chunk: ChunkDetail;
         }> = [];
 
+        // Debug logging
+        if (import.meta.env.DEV) {
+            console.log('[ChunkStakeholderSidebar] Computing allMentions from chunks:', chunks.length);
+            console.log('[ChunkStakeholderSidebar] isDocumentProcessing:', isDocumentProcessing);
+        }
+
         chunks.forEach((chunk) => {
-            chunk.stakeholder_mentions.forEach((mention) => {
-                mentions.push({ mention, chunk });
-            });
+            if (chunk.stakeholder_mentions && Array.isArray(chunk.stakeholder_mentions)) {
+                chunk.stakeholder_mentions.forEach((mention) => {
+                    mentions.push({ mention, chunk });
+                });
+            }
         });
+
+        if (import.meta.env.DEV) {
+            console.log('[ChunkStakeholderSidebar] Total mentions found:', mentions.length);
+        }
 
         return mentions.sort((a, b) => {
             if (a.chunk.page !== b.chunk.page) {
@@ -162,7 +176,7 @@ export function ChunkStakeholderSidebar({
             }
             return aX - bX;
         });
-    }, [chunks]);
+    }, [chunks, isDocumentProcessing]);
 
     const mentionsByPage = useMemo(() => {
         const grouped = new Map<number, typeof allMentions>();
@@ -516,9 +530,23 @@ export function ChunkStakeholderSidebar({
                         </div>
                     </div>
                     <div className="flex items-center justify-center py-8">
-                        <div className="text-sm text-gray-500 text-center">
-                            Geen stakeholder vermeldingen gevonden
-                        </div>
+                        {isDocumentProcessing ? (
+                            <div className="space-y-4 text-center">
+                                <Loader2 className="h-12 w-12 text-gray-400 animate-spin mx-auto" />
+                                <div className="space-y-2">
+                                    <div className="text-sm font-medium text-gray-700">
+                                        Document wordt verwerkt
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                        Belanghebbenden worden geïdentificeerd...
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-sm text-gray-500 text-center">
+                                Geen stakeholder vermeldingen gevonden
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

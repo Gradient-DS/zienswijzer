@@ -31,6 +31,8 @@ export function PDFViewer({ documentId, className, onNextDocument, allDocuments,
     const [containerWidth, setContainerWidth] = useState<number>(0);
     const [pageDimensions, setPageDimensions] = useState<Map<number, PageDimensions>>(new Map());
     const [selectedMentionId, setSelectedMentionId] = useState<string | null>(null);
+    const [hasAutoSelected, setHasAutoSelected] = useState(false);
+    const [previousChunkCount, setPreviousChunkCount] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -39,6 +41,24 @@ export function PDFViewer({ documentId, className, onNextDocument, allDocuments,
     const { data: document, isLoading: documentLoading } = useDocument(documentId, caseId);
     const pdfUrl = getDocumentPdfUrl(documentId);
     const { isChunkSidebarOpen, setChunkSidebarOpen } = useUIStore();
+
+    // Detect when chunks are loaded and force re-render
+    useEffect(() => {
+        const currentChunkCount = document?.chunks?.length || 0;
+        const totalMentions = document?.chunks?.flatMap(c => c.stakeholder_mentions || []).length || 0;
+
+        if (currentChunkCount > 0 && currentChunkCount !== previousChunkCount) {
+            console.log('[PDFViewer] Chunks loaded! Count changed from', previousChunkCount, 'to', currentChunkCount);
+            console.log('[PDFViewer] Total stakeholder mentions:', totalMentions);
+            console.log('[PDFViewer] Parse status:', document?.parse_status);
+            setPreviousChunkCount(currentChunkCount);
+        }
+    }, [document?.chunks, previousChunkCount, document?.parse_status]);
+
+    // Reset chunk count when document changes
+    useEffect(() => {
+        setPreviousChunkCount(0);
+    }, [documentId]);
 
     useEffect(() => {
         const updateContainerWidth = () => {
@@ -138,7 +158,7 @@ export function PDFViewer({ documentId, className, onNextDocument, allDocuments,
     }, [isChunkSidebarOpen, selectedMentionId]);
 
     useEffect(() => {
-        if (document?.chunks && document.chunks.length > 0 && !selectedMentionId) {
+        if (document?.chunks && document.chunks.length > 0 && !selectedMentionId && !hasAutoSelected) {
             const firstChunkWithMentions = document.chunks.find(
                 (chunk) => chunk.stakeholder_mentions && chunk.stakeholder_mentions.length > 0
             );
@@ -147,10 +167,16 @@ export function PDFViewer({ documentId, className, onNextDocument, allDocuments,
                 const firstMention = firstChunkWithMentions.stakeholder_mentions[0];
                 setSelectedMentionId(firstMention.id);
                 setChunkSidebarOpen(true);
+                setHasAutoSelected(true);
                 scrollToMention(firstChunkWithMentions.page, firstMention);
             }
         }
-    }, [document?.chunks]);
+    }, [document?.chunks, selectedMentionId, hasAutoSelected]);
+
+    // Reset auto-select flag when document changes
+    useEffect(() => {
+        setHasAutoSelected(false);
+    }, [documentId]);
 
     if (documentLoading) {
         return (
@@ -240,6 +266,7 @@ export function PDFViewer({ documentId, className, onNextDocument, allDocuments,
                         onNextDocument={onNextDocument}
                         allDocuments={allDocuments}
                         onNavigateToNextStep={onNavigateToNextStep}
+                        isDocumentProcessing={!document?.chunks || document.chunks.length === 0}
                     />
                 )}
             </div>
