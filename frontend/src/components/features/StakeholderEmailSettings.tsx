@@ -30,7 +30,7 @@ export function StakeholderEmailSettings({
     isGeneratingPDF = false,
 }: StakeholderEmailSettingsProps) {
     const [contentType, setContentType] = useState<ContentType>('chunks_only');
-    const [recipientEmail, setRecipientEmail] = useState(stakeholder.contact_info || '');
+    const [recipientEmail, setRecipientEmail] = useState(stakeholder.contact_info || 'lex@gradient-ds.com');
     const [recipientName, setRecipientName] = useState(stakeholder.name);
     const [subject, setSubject] = useState(`WOO Verzoek - ${stakeholder.name}`);
     const [customMessage, setCustomMessage] = useState('');
