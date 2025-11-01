@@ -1,19 +1,10 @@
 services:
 
   api:
-    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME_API:-${GITHUB_REPOSITORY_OWNER}/woo-api}:${API_VERSION:-latest}
+    image: ghcr.io/gradient-ds/woo-api:latest
     container_name: api
-    environment:
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8082}
-      ADMIN_NAME: ${ADMIN_NAME:-}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      SESSION_TYPE: ${SESSION_TYPE:-filesystem}
-      SESSION_FILE_DIR: ${SESSION_FILE_DIR:-/app/flask_session}
-      SESSION_COOKIE_HTTPONLY: ${SESSION_COOKIE_HTTPONLY:-True}
-      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-True}  # Set to True for HTTPS
-      SESSION_COOKIE_SAMESITE: ${SESSION_COOKIE_SAMESITE:-Lax}
-
+    env_file:
+      - /home/deploy/repo/backend/.env
     expose:
       - "5002"
     restart: unless-stopped
@@ -31,7 +22,7 @@ services:
       - /app/flask_session
 
   frontend:
-    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME_FRONTEND:-${GITHUB_REPOSITORY_OWNER}/woo-frontend}:${FRONTEND_VERSION:-latest}
+    image: ghcr.io/gradient-ds/woo-frontend:latest
     container_name: frontend
     environment:
       VITE_APP_FLASK_BACKEND_URL: /api
@@ -87,7 +78,7 @@ services:
   certbot:
     image: certbot/certbot:latest
     container_name: certbot-prod
-    networks: [edge]
+    networks: [ edge ]
     volumes:
       - /srv/woo/letsencrypt:/etc/letsencrypt
       - /srv/woo/certbot-www:/var/www/certbot
