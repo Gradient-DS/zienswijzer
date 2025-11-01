@@ -10,21 +10,51 @@ interface PDFHighlightOverlayProps {
     onMentionClick?: (mention: StakeholderMention) => void;
 }
 
-const STAKEHOLDER_COLORS: Record<string, string> = {
-    organization: '#3B82F6',
-    individual: '#10B981',
-    government: '#F59E0B',
-    community: '#8B5CF6',
-    environmental: '#059669',
-    default: '#6B7280',
+const COLORS = {
+    default: '#000000',      // Black for default state
+    selected: '#3B82F6',     // Blue for selected state
+    accepted: '#10B981',     // Green for accepted state
+    rejected: '#EF4444',     // Red for rejected state
 };
 
-function getHighlightColor(stakeholderType: string): string {
-    return STAKEHOLDER_COLORS[stakeholderType] || STAKEHOLDER_COLORS.default;
-}
+function getHighlightStyle(mention: StakeholderMention, isSelected: boolean) {
+    // Accepted state: green solid border with high opacity green fill
+    if (mention.accepted) {
+        return {
+            stroke: COLORS.accepted,
+            fill: `${COLORS.accepted}CC`, // 80% opacity (CC in hex)
+            strokeDasharray: '0',
+            strokeWidth: 2,
+        };
+    }
 
-function getHighlightOpacity(confidence: number): number {
-    return Math.max(0.3, confidence);
+    // Rejected state: red solid border with high opacity red fill
+    if (mention.rejected) {
+        return {
+            stroke: COLORS.rejected,
+            fill: `${COLORS.rejected}CC`, // 80% opacity (CC in hex)
+            strokeDasharray: '0',
+            strokeWidth: 2,
+        };
+    }
+
+    // Selected state: blue border, transparent fill (keeps area clickable)
+    if (isSelected) {
+        return {
+            stroke: COLORS.selected,
+            fill: 'transparent',
+            strokeDasharray: '0',
+            strokeWidth: 3,
+        };
+    }
+
+    // Default state: black dashed border, transparent fill (keeps area clickable)
+    return {
+        stroke: COLORS.default,
+        fill: 'transparent',
+        strokeDasharray: '4 2',
+        strokeWidth: 2,
+    };
 }
 
 function transformBbox(bbox: BoundingBox, scale: number, pageHeight: number): BoundingBox {
@@ -103,10 +133,8 @@ export function PDFHighlightOverlay({
             viewBox={`0 0 ${scaledWidth} ${scaledHeight}`}
         >
             {allMentions.map((mention) => {
-                const color = getHighlightColor(mention.stakeholder.type);
-                const opacity = getHighlightOpacity(mention.confidence);
-                const borderStyle = mention.checked ? 'solid' : 'dashed';
                 const isSelected = selectedMentionId === mention.id;
+                const style = getHighlightStyle(mention, isSelected);
 
                 return (
                     <rect
@@ -115,10 +143,10 @@ export function PDFHighlightOverlay({
                         y={mention.transformedBbox.y}
                         width={mention.transformedBbox.width}
                         height={mention.transformedBbox.height}
-                        fill={`${color}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`}
-                        stroke={isSelected ? '#3B82F6' : color}
-                        strokeWidth={isSelected ? 4 : 2}
-                        strokeDasharray={borderStyle === 'dashed' ? '4 2' : '0'}
+                        fill={style.fill}
+                        stroke={style.stroke}
+                        strokeWidth={style.strokeWidth}
+                        strokeDasharray={style.strokeDasharray}
                         style={{ cursor: 'pointer' }}
                         onClick={() => onMentionClick?.(mention)}
                         onMouseEnter={(e) => {
