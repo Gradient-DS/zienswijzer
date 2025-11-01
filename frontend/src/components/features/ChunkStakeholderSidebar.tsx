@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { X, Trash2, ArrowDown, ArrowUp, ArrowRight, Check } from 'lucide-react';
 import { useVerifyMention, useRemoveMention, useBulkAcceptMentions } from '@/api/verification';
-import { useDocumentCompletionStatus, useCase } from '@/api/cases';
+import { useDocumentCompletionStatus } from '@/api/cases';
 import type { ChunkDetail, StakeholderMention } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -132,7 +132,6 @@ export function ChunkStakeholderSidebar({
     const bulkAcceptMentions = useBulkAcceptMentions();
     const location = useLocation();
     const resolvedCaseId = caseId || location.pathname.match(/\/cases\/([^/]+)/)?.[1];
-    const { data: caseData } = useCase(resolvedCaseId);
     const { data: documentCompletionStatus } = useDocumentCompletionStatus(resolvedCaseId);
     const [bulkThreshold, setBulkThreshold] = useState(70);
     const [isBulkAccepting, setIsBulkAccepting] = useState(false);
@@ -590,7 +589,7 @@ export function ChunkStakeholderSidebar({
                                         onClick={handleBulkAccept}
                                         disabled={isBulkAccepting}
                                         className="h-7 w-7 p-0 flex-shrink-0"
-                                        title={`Accepteer alle vermeldingen boven ${bulkThreshold}% in alle documenten van deze zaak`}
+                                        title={`Accepteer alle vermeldingen boven ${bulkThreshold}% in dit document`}
                                     >
                                         {isBulkAccepting ? (
                                             <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
