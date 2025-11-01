@@ -128,6 +128,13 @@ function StakeholderBoardColumn({
             return column.id === 'not_contacted';
         }
 
+        // Check if any email has replies
+        const hasReplies = filteredEmails.some(email => email.replyCount && email.replyCount > 0);
+
+        if (hasReplies) {
+            return column.id === 'responded';
+        }
+
         const mostRecentEmail = filteredEmails.sort((a, b) =>
             new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()
         )[0];

@@ -501,6 +501,7 @@ class DocumentStatus(BaseModel):
     document_title: str
     is_ok: bool  # True if all stakeholders agree or no objections
     objected_chunks: List[ObjectedChunk]
+    stakeholder_ids: List[str]  # List of stakeholder IDs mentioned in this document
 
 
 class StakeholderResponse(BaseModel):
@@ -586,6 +587,7 @@ def get_case_overview(case_id: str):
         # Get all chunks for this document with case-specific verification status
         chunks = db.get_chunks_by_document(doc_id)
         objected_chunks = []
+        document_stakeholder_ids = set()  # Track unique stakeholders in this document
 
         for chunk in chunks:
             # Get stakeholder mentions for this chunk with case verification
@@ -594,6 +596,7 @@ def get_case_overview(case_id: str):
             for cs in chunk_stakeholders:
                 stakeholder_id = cs["stakeholder_id"]
                 all_stakeholder_ids.add(stakeholder_id)
+                document_stakeholder_ids.add(stakeholder_id)  # Track for this document
 
                 # Check if this mention is objected (verified=False in CaseChunkStakeholderVerification)
                 verification_status = db.get_case_mention_verification(case_id, cs["id"])
@@ -621,6 +624,7 @@ def get_case_overview(case_id: str):
                 document_title=doc["title"],
                 is_ok=(len(objected_chunks) == 0),
                 objected_chunks=objected_chunks,
+                stakeholder_ids=list(document_stakeholder_ids),
             )
         )
 

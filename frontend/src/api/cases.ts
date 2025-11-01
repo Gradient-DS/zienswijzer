@@ -214,6 +214,7 @@ export interface DocumentStatus {
     document_title: string;
     is_ok: boolean;
     objected_chunks: ObjectedChunk[];
+    stakeholder_ids: string[];
 }
 
 export interface StakeholderResponse {
