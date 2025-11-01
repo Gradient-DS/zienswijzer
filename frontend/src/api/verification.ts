@@ -108,3 +108,110 @@ export const useRemoveMention = () => {
     });
 };
 
+interface BulkAcceptRequest {
+    mentionIds: string[];
+    caseId: string;
+}
+
+export const useBulkAcceptMentions = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ mentionIds, caseId }: BulkAcceptRequest) => {
+            await Promise.all(
+                mentionIds.map((mentionId) =>
+                    apiClient.post<VerifyMentionResponse>(
+                        `/verification/mention/${mentionId}`,
+                        { verified: true, case_id: caseId }
+                    )
+                )
+            );
+            return { success: true, count: mentionIds.length };
+        },
+        onMutate: async ({ mentionIds, caseId }) => {
+            // Cancel outgoing refetches
+            await queryClient.cancelQueries({ queryKey: ['documents'] });
+            await queryClient.cancelQueries({ queryKey: ['cases'] });
+
+            // Snapshot previous values
+            const previousDocuments = new Map();
+            const previousCases = new Map();
+
+            // Get all document queries and update them optimistically
+            queryClient.getQueriesData({ queryKey: ['documents'] }).forEach(([key, data]) => {
+                if (data && typeof data === 'object' && 'document' in data) {
+                    previousDocuments.set(key, data);
+
+                    const updatedData = JSON.parse(JSON.stringify(data));
+                    if (updatedData.document?.chunks) {
+                        updatedData.document.chunks = updatedData.document.chunks.map((chunk: any) => ({
+                            ...chunk,
+                            stakeholder_mentions: chunk.stakeholder_mentions.map((mention: any) => {
+                                if (mentionIds.includes(mention.id)) {
+                                    return {
+                                        ...mention,
+                                        checked: true,
+                                        accepted: true,
+                                        rejected: null,
+                                    };
+                                }
+                                return mention;
+                            }),
+                        }));
+                    }
+                    queryClient.setQueryData(key, updatedData);
+                }
+            });
+
+            // Update case queries optimistically
+            queryClient.getQueriesData({ queryKey: ['cases', caseId] }).forEach(([key, data]) => {
+                if (data && typeof data === 'object' && 'chunks' in data) {
+                    previousCases.set(key, data);
+
+                    const updatedData = JSON.parse(JSON.stringify(data));
+                    if (updatedData.chunks) {
+                        updatedData.chunks = updatedData.chunks.map((chunk: any) => ({
+                            ...chunk,
+                            stakeholder_mentions: chunk.stakeholder_mentions.map((mention: any) => {
+                                if (mentionIds.includes(mention.id)) {
+                                    return {
+                                        ...mention,
+                                        checked: true,
+                                        accepted: true,
+                                        rejected: null,
+                                    };
+                                }
+                                return mention;
+                            }),
+                        }));
+                    }
+                    queryClient.setQueryData(key, updatedData);
+                }
+            });
+
+            return { previousDocuments, previousCases };
+        },
+        onError: (_err, _variables, context) => {
+            // Revert optimistic updates on error
+            if (context?.previousDocuments) {
+                context.previousDocuments.forEach((data, key) => {
+                    queryClient.setQueryData(key, data);
+                });
+            }
+            if (context?.previousCases) {
+                context.previousCases.forEach((data, key) => {
+                    queryClient.setQueryData(key, data);
+                });
+            }
+        },
+        onSuccess: (_, variables) => {
+            // Refetch to ensure consistency with server
+            queryClient.invalidateQueries({ queryKey: ['cases'] });
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+            queryClient.invalidateQueries({ queryKey: ['stakeholders'] });
+            if (variables.caseId) {
+                queryClient.invalidateQueries({ queryKey: ['cases', variables.caseId, 'document-completion'] });
+            }
+        },
+    });
+};
+

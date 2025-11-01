@@ -137,6 +137,21 @@ export function PDFViewer({ documentId, className, onNextDocument, allDocuments,
         }
     }, [isChunkSidebarOpen, selectedMentionId]);
 
+    useEffect(() => {
+        if (document?.chunks && document.chunks.length > 0 && !selectedMentionId) {
+            const firstChunkWithMentions = document.chunks.find(
+                (chunk) => chunk.stakeholder_mentions && chunk.stakeholder_mentions.length > 0
+            );
+
+            if (firstChunkWithMentions && firstChunkWithMentions.stakeholder_mentions.length > 0) {
+                const firstMention = firstChunkWithMentions.stakeholder_mentions[0];
+                setSelectedMentionId(firstMention.id);
+                setChunkSidebarOpen(true);
+                scrollToMention(firstChunkWithMentions.page, firstMention);
+            }
+        }
+    }, [document?.chunks]);
+
     if (documentLoading) {
         return (
             <div className={`flex items-center justify-center h-full transition-opacity duration-300 ${className || ''}`}>

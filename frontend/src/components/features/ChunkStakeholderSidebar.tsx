@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { X, Trash2, ArrowDown, ArrowUp, ArrowRight, Check } from 'lucide-react';
-import { useVerifyMention, useBulkVerifyMentions, useRemoveMention } from '@/api/verification';
-import { useDocumentCompletionStatus } from '@/api/cases';
+import { useVerifyMention, useRemoveMention, useBulkAcceptMentions } from '@/api/verification';
+import { useDocumentCompletionStatus, useCase } from '@/api/cases';
 import type { ChunkDetail, StakeholderMention } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -129,11 +129,13 @@ export function ChunkStakeholderSidebar({
     const sidebarRef = useRef<HTMLDivElement>(null);
     const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
     const verifyMention = useVerifyMention();
-    const bulkVerify = useBulkVerifyMentions();
+    const bulkAcceptMentions = useBulkAcceptMentions();
     const location = useLocation();
     const resolvedCaseId = caseId || location.pathname.match(/\/cases\/([^/]+)/)?.[1];
+    const { data: caseData } = useCase(resolvedCaseId);
     const { data: documentCompletionStatus } = useDocumentCompletionStatus(resolvedCaseId);
     const [bulkThreshold, setBulkThreshold] = useState(70);
+    const [isBulkAccepting, setIsBulkAccepting] = useState(false);
 
     const allMentions = useMemo(() => {
         const mentions: Array<{
@@ -301,28 +303,62 @@ export function ChunkStakeholderSidebar({
         }
 
         const threshold = bulkThreshold / 100;
-        const mentionsToAccept = uncheckedMentions.filter(
-            ({ mention }) => mention.confidence >= threshold
+
+        // Use current document mentions only (simple and works)
+        const allCaseMentions = allMentions;
+
+        console.log('[BulkAccept] Total mentions in current document:', allCaseMentions.length);
+        console.log('[BulkAccept] Threshold:', threshold, `(${bulkThreshold}%)`);
+
+        // Debug: log first few mentions to check confidence values
+        if (allCaseMentions.length > 0) {
+            console.log('[BulkAccept] Sample mentions:', allCaseMentions.slice(0, 5).map(m => ({
+                id: m.mention.id.substring(0, 8),
+                confidence: m.mention.confidence,
+                checked: m.mention.checked
+            })));
+        }
+
+        // Filter to unchecked mentions above threshold
+        const mentionsToAccept = allCaseMentions.filter(
+            ({ mention }) => !mention.checked && mention.confidence >= threshold
         );
+
+        console.log('[BulkAccept] Mentions to accept:', mentionsToAccept.length);
+        console.log('[BulkAccept] Breakdown:');
+        console.log('  - Total mentions:', allCaseMentions.length);
+        console.log('  - Unchecked:', allCaseMentions.filter(m => !m.mention.checked).length);
+        console.log('  - Above threshold:', allCaseMentions.filter(m => m.mention.confidence >= threshold).length);
+        console.log('  - Both conditions:', mentionsToAccept.length);
 
         if (mentionsToAccept.length === 0) {
             alert(`Geen vermeldingen gevonden met confidence >= ${bulkThreshold}%`);
             return;
         }
 
+        const mentionIds = mentionsToAccept.map(({ mention }) => mention.id);
+        const count = mentionIds.length;
+
+        // Confirm for large operations
+        if (count > 50) {
+            const confirmed = window.confirm(
+                `Je staat op het punt om ${count} vermeldingen in alle documenten te accepteren. Doorgaan?`
+            );
+            if (!confirmed) return;
+        }
+
+        setIsBulkAccepting(true);
         try {
-            for (const { mention } of mentionsToAccept) {
-                await verifyMention.mutateAsync({
-                    mentionId: mention.id,
-                    checked: true,
-                    accepted: true,
-                    rejected: null,
-                    caseId: resolvedCaseId,
-                });
-            }
+            // Use optimistic update hook - UI updates instantly!
+            await bulkAcceptMentions.mutateAsync({
+                mentionIds,
+                caseId: resolvedCaseId,
+            });
         } catch (error) {
             console.error('Failed to bulk accept:', error);
             alert('Bulk acceptatie mislukt.');
+        } finally {
+            setIsBulkAccepting(false);
         }
     };
 
@@ -552,11 +588,15 @@ export function ChunkStakeholderSidebar({
                                         variant="default"
                                         size="sm"
                                         onClick={handleBulkAccept}
-                                        disabled={bulkVerify.isPending}
+                                        disabled={isBulkAccepting}
                                         className="h-7 w-7 p-0 flex-shrink-0"
-                                        title={`Accepteer ${uncheckedMentions.filter(({ mention }) => mention.confidence >= bulkThreshold / 100).length} vermeldingen`}
+                                        title={`Accepteer alle vermeldingen boven ${bulkThreshold}% in alle documenten van deze zaak`}
                                     >
-                                        <Check className="h-4 w-4" />
+                                        {isBulkAccepting ? (
+                                            <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                        ) : (
+                                            <Check className="h-4 w-4" />
+                                        )}
                                     </Button>
                                 </div>
                             )
