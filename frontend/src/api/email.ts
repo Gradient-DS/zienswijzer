@@ -50,6 +50,9 @@ export const useSendStakeholderEmail = () => {
                 queryKey: ['stakeholder-emails', variables.case_id, variables.stakeholder_id],
             });
             queryClient.invalidateQueries({
+                queryKey: ['case-emails', variables.case_id],
+            });
+            queryClient.invalidateQueries({
                 queryKey: ['cases', variables.case_id],
             });
         },
@@ -118,6 +121,25 @@ export const useStakeholderEmails = (
             return emails;
         },
         enabled: !!stakeholderId && !!caseId,
+    });
+};
+
+export const useAllCaseEmails = (caseId: string | undefined) => {
+    return useQuery({
+        queryKey: ['case-emails', caseId],
+        queryFn: async () => {
+            if (!caseId) return [];
+
+            const response = await apiClient.get<SentEmailListResponse>(
+                '/email/sent',
+                {
+                    params: { case_id: caseId },
+                }
+            );
+
+            return response.data.emails;
+        },
+        enabled: !!caseId,
     });
 };
 

@@ -1,35 +1,27 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { useStakeholderMentions } from '@/api/stakeholders';
-import { useStakeholderEmails } from '@/api/email';
 import { getStakeholderStatus } from '@/lib/stakeholder-status';
 import type { StakeholderStatus } from '@/lib/stakeholder-status';
-import type { Stakeholder } from '@/types';
+import type { Stakeholder, ChunkDetail } from '@/types';
+import type { SentEmail } from '@/types/email';
 import { cn } from '@/lib/utils';
 import { STATUS_COLUMNS } from './StakeholderBoard';
 
 interface StakeholderBoardItemProps {
     stakeholder: Stakeholder;
     targetStatus: StakeholderStatus;
-    caseId: string;
     onClick: () => void;
-    onRender?: (stakeholderId: string, rendered: boolean) => void;
+    chunks: ChunkDetail[];
+    sentEmails: SentEmail[];
 }
 
 export function StakeholderBoardItem({
     stakeholder,
     targetStatus,
-    caseId,
     onClick,
-    onRender,
+    chunks,
+    sentEmails,
 }: StakeholderBoardItemProps) {
-    const { data: chunks } = useStakeholderMentions(caseId, stakeholder.id);
-    const { data: sentEmails = [] } = useStakeholderEmails(
-        stakeholder.id,
-        caseId,
-        stakeholder.contact_info
-    );
-
     const status = useMemo(() => {
         if (!chunks || chunks.length === 0) {
             return 'not_processed' as StakeholderStatus;
@@ -42,19 +34,12 @@ export function StakeholderBoardItem({
         });
     }, [chunks, sentEmails, stakeholder.id, stakeholder.contact_info]);
 
+    const shouldRender = status === targetStatus;
+
     // Only render if this stakeholder's status matches the column
-    if (status !== targetStatus) {
-        onRender?.(stakeholder.id, false);
+    if (!shouldRender) {
         return null;
     }
-
-    // Call onRender in useEffect to ensure it's called after render
-    useEffect(() => {
-        onRender?.(stakeholder.id, true);
-        return () => {
-            onRender?.(stakeholder.id, false);
-        };
-    }, [stakeholder.id, onRender]);
 
     const statusColumn = STATUS_COLUMNS.find(col => col.id === status);
 

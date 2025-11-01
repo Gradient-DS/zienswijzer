@@ -15,6 +15,18 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument, 
     const { data: completionStatus } = useDocumentCompletionStatus(caseId);
     const { data: processingStatus } = useDocumentProcessingStatus(caseId);
 
+    const getDocumentTitle = (document: Document): string => {
+        if (document.title && document.title.trim()) {
+            return document.title;
+        }
+        if (document.file_path) {
+            const filename = document.file_path.split('/').pop() || document.file_path;
+            const cleanedFilename = filename.replace(/^doc_[a-f0-9-]+_/, '');
+            return cleanedFilename;
+        }
+        return 'Untitled Document';
+    };
+
     if (documents.length === 0) {
         return (
             <div className="text-center py-8 text-muted-foreground">
@@ -28,6 +40,7 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument, 
             {documents.map((document) => {
                 const allChecked = completionStatus?.get(document.id) ?? false;
                 const isProcessing = processingStatus?.get(document.id) ?? true;
+                const displayTitle = getDocumentTitle(document);
 
                 // Debug logging
                 if (import.meta.env.DEV && isProcessing) {
@@ -64,7 +77,7 @@ export function DocumentList({ documents, selectedDocumentId, onSelectDocument, 
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                                 <div className="text-sm font-medium truncate">
-                                    {document.title}
+                                    {displayTitle}
                                 </div>
                                 {allChecked && !isProcessing && (
                                     <Check className="h-5 w-5 text-green-600 flex-shrink-0" />

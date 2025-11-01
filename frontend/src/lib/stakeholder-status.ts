@@ -29,8 +29,7 @@ export function getStakeholderStatus({
     }
 
     // Filter emails for this stakeholder
-    // Note: sentEmails should already be filtered by useStakeholderEmails, but we check both
-    // stakeholderId (if available) and contactInfo as fallback
+    // Match by stakeholderId if available, or by contactInfo
     const stakeholderEmails = sentEmails.filter(email => {
         // If email has stakeholderId, match by that
         if (email.stakeholderId && email.stakeholderId === stakeholderId) {
@@ -39,26 +38,28 @@ export function getStakeholderStatus({
         // Otherwise, match by contact info if available
         if (contactInfo) {
             return email.toRecipients.some(
-                recipient => recipient.address.toLowerCase() === contactInfo.toLowerCase()
+                recipient => recipient.address.toLowerCase().trim() === contactInfo.toLowerCase().trim()
             );
         }
-        // If no contact info, assume all emails in the filtered list are for this stakeholder
-        // (since useStakeholderEmails already filtered by contact_info)
-        return true;
+        // If no contact info and no stakeholderId match, don't include this email
+        return false;
     });
 
     if (stakeholderEmails.length === 0) {
         return 'not_contacted';
     }
 
+    // Check if any email has replies
+    const hasReplies = stakeholderEmails.some(email => email.replyCount && email.replyCount > 0);
+
+    if (hasReplies) {
+        return 'responded';
+    }
+
     // Get the most recent email
     const mostRecentEmail = stakeholderEmails.sort((a, b) =>
         new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()
     )[0];
-
-    // Check if there are any replies to any of the stakeholder emails
-    // Note: This requires checking email replies, which we'll need to fetch
-    // For now, we'll assume replies are passed in or we check via a different mechanism
 
     // Calculate time since most recent email
     const emailTime = new Date(mostRecentEmail.sentAt).getTime();
@@ -98,10 +99,11 @@ export function getStakeholderStatusWithReplies({
         }
         if (contactInfo) {
             return email.toRecipients.some(
-                recipient => recipient.address.toLowerCase() === contactInfo.toLowerCase()
+                recipient => recipient.address.toLowerCase().trim() === contactInfo.toLowerCase().trim()
             );
         }
-        return true;
+        // If no contact info and no stakeholderId match, don't include this email
+        return false;
     });
 
     if (stakeholderEmails.length === 0) {
