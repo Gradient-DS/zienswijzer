@@ -6,7 +6,7 @@ import { useSendStakeholderEmail, useGenerateStakeholderPDF, useStakeholderEmail
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Check, Mail, FileText, Clock } from 'lucide-react';
+import { Check, Mail, FileText, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { StakeholderEmailSettings } from './StakeholderEmailSettings';
 import { EmailTimeline } from './EmailTimeline';
 import { EmailAuthDialog } from './EmailAuthDialog';
@@ -338,6 +338,45 @@ export function StakeholderDetailView({
                             </div>
 
                             <div className="flex-1 space-y-3">
+                                {/* Publication Status - Prominent Display */}
+                                {stakeholderStatus === 'responded' && stakeholder.publication_status && (
+                                    <div className={`p-3 rounded-lg border-2 ${stakeholder.publication_status === 'agree'
+                                        ? 'bg-green-50 border-green-200'
+                                        : stakeholder.publication_status === 'disagree'
+                                            ? 'bg-orange-50 border-orange-200'
+                                            : 'bg-gray-50 border-gray-200'
+                                        }`}>
+                                        <div className="flex items-center gap-2">
+                                            {stakeholder.publication_status === 'agree' && (
+                                                <>
+                                                    <CheckCircle className="h-5 w-5 text-green-600" />
+                                                    <span className="font-semibold text-green-900">Geaccepteerd</span>
+                                                </>
+                                            )}
+                                            {stakeholder.publication_status === 'disagree' && (
+                                                <>
+                                                    <AlertCircle className="h-5 w-5 text-orange-600" />
+                                                    <span className="font-semibold text-orange-900">Bezwaar ingediend</span>
+                                                </>
+                                            )}
+                                            {stakeholder.publication_status === 'pending' && (
+                                                <>
+                                                    <Clock className="h-5 w-5 text-gray-600" />
+                                                    <span className="font-semibold text-gray-900">In afwachting van reactie</span>
+                                                </>
+                                            )}
+                                        </div>
+                                        <p className="text-sm mt-1 ml-7 text-gray-700">
+                                            {stakeholder.publication_status === 'agree'
+                                                ? 'Belanghebbende stemt in met publicatie'
+                                                : stakeholder.publication_status === 'disagree'
+                                                    ? 'Belanghebbende heeft bezwaar gemaakt tegen publicatie'
+                                                    : 'Wachten op definitieve reactie van belanghebbende'
+                                            }
+                                        </p>
+                                    </div>
+                                )}
+
                                 <div className="text-sm text-gray-600">
                                     <span className="font-semibold text-gray-900">{acceptedChunks.length}</span> vermelding{acceptedChunks.length !== 1 ? 'en' : ''} van de{' '}
                                     <span className="font-semibold text-gray-900">{unprocessedChunks.length + processedChunks.length}</span> geaccepteerd
@@ -369,19 +408,19 @@ export function StakeholderDetailView({
                                     </div>
                                 )}
 
-                                {stakeholderStatus === 'contacted' && (
+                                {stakeholderStatus === 'contacted' && !stakeholder.publication_status && (
                                     <div className="text-sm text-green-700">
                                         Recent gecontacteerd. Wacht op reactie.
                                     </div>
                                 )}
 
-                                {stakeholderStatus === 'contacted_old' && (
+                                {stakeholderStatus === 'contacted_old' && !stakeholder.publication_status && (
                                     <div className="text-sm text-orange-700">
                                         Meer dan 1 uur geleden gecontacteerd. Mogelijk nog geen reactie ontvangen.
                                     </div>
                                 )}
 
-                                {stakeholderStatus === 'responded' && (
+                                {stakeholderStatus === 'responded' && !stakeholder.publication_status && (
                                     <div className="text-sm text-green-700">
                                         Er is gereageerd op de verzonden e-mail.
                                     </div>

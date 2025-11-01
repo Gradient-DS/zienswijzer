@@ -6,6 +6,7 @@ import type { Stakeholder, ChunkDetail } from '@/types';
 import type { SentEmail } from '@/types/email';
 import { cn } from '@/lib/utils';
 import { STATUS_COLUMNS } from './StakeholderBoard';
+import { CheckCircle, AlertCircle } from 'lucide-react';
 
 interface StakeholderBoardItemProps {
     stakeholder: Stakeholder;
@@ -43,6 +44,28 @@ export function StakeholderBoardItem({
 
     const statusColumn = STATUS_COLUMNS.find(col => col.id === status);
 
+    const getPublicationStatusIcon = () => {
+        if (status !== 'responded') return null;
+
+        if (stakeholder.publication_status === 'agree') {
+            return (
+                <div title="Akkoord met publicatie">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                </div>
+            );
+        }
+
+        if (stakeholder.publication_status === 'disagree') {
+            return (
+                <div title="Bezwaar tegen publicatie">
+                    <AlertCircle className="h-4 w-4 text-orange-600" />
+                </div>
+            );
+        }
+
+        return null;
+    };
+
     return (
         <Card
             className={cn(
@@ -71,11 +94,14 @@ export function StakeholderBoardItem({
                             )}
                         </div>
                     </div>
-                    {statusColumn && (
-                        <div className={cn('flex-shrink-0', statusColumn.color)}>
-                            {statusColumn.icon}
-                        </div>
-                    )}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        {getPublicationStatusIcon()}
+                        {statusColumn && (
+                            <div className={cn(statusColumn.color)}>
+                                {statusColumn.icon}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </CardContent>
         </Card>
