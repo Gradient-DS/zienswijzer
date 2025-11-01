@@ -10,6 +10,7 @@ export interface Stakeholder {
     type: string;
     name: string;
     contact_info: string;
+    publication_status?: 'agree' | 'disagree' | 'pending' | null;
     created_at: string;
     updated_at: string;
 }

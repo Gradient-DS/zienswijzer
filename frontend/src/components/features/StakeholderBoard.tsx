@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
-import { useCaseStakeholders } from '@/api/stakeholders';
+import { useCaseStakeholders, useAllStakeholderMentions } from '@/api/stakeholders';
+import { useAllCaseEmails } from '@/api/email';
 import type { StakeholderStatus } from '@/lib/stakeholder-status';
-import type { Stakeholder } from '@/types';
+import type { Stakeholder, ChunkDetail } from '@/types';
+import type { SentEmail } from '@/types/email';
 import { FileText, Clock, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StakeholderBoardItem } from './StakeholderBoardItem';
@@ -55,6 +56,15 @@ export const STATUS_COLUMNS: StatusColumn[] = [
 
 export function StakeholderBoard({ caseId, onSelectStakeholder }: StakeholderBoardProps) {
     const { data: stakeholders = [] } = useCaseStakeholders(caseId);
+    const { data: allMentionsMap = new Map() } = useAllStakeholderMentions(caseId);
+    const { data: allEmails = [] } = useAllCaseEmails(caseId);
+
+    console.log('[StakeholderBoard] Total emails:', allEmails.length);
+    console.log('[StakeholderBoard] All emails:', allEmails.map(e => ({
+        id: e.id,
+        stakeholderId: e.stakeholderId,
+        to: e.toRecipients.map(r => r.address)
+    })));
 
     return (
         <div className="h-full overflow-auto p-6">
@@ -64,8 +74,9 @@ export function StakeholderBoard({ caseId, onSelectStakeholder }: StakeholderBoa
                         key={column.id}
                         column={column}
                         stakeholders={stakeholders}
-                        caseId={caseId}
                         onSelectStakeholder={onSelectStakeholder}
+                        allMentionsMap={allMentionsMap}
+                        allEmails={allEmails}
                     />
                 ))}
             </div>
@@ -76,31 +87,68 @@ export function StakeholderBoard({ caseId, onSelectStakeholder }: StakeholderBoa
 function StakeholderBoardColumn({
     column,
     stakeholders,
-    caseId,
     onSelectStakeholder,
+    allMentionsMap,
+    allEmails,
 }: {
     column: StatusColumn;
     stakeholders: Stakeholder[];
-    caseId: string;
     onSelectStakeholder: (stakeholderId: string) => void;
+    allMentionsMap: Map<string, ChunkDetail[]>;
+    allEmails: SentEmail[];
 }) {
-    const [visibleCount, setVisibleCount] = useState(0);
-    const renderedItemsRef = useRef(new Set<string>());
+    // Filter stakeholders that belong in this column based on their status
+    const stakeholdersInColumn = stakeholders.filter(stakeholder => {
+        const chunks = allMentionsMap.get(stakeholder.id) || [];
 
-    useEffect(() => {
-        // Reset count when stakeholders change
-        renderedItemsRef.current.clear();
-        setVisibleCount(0);
-    }, [stakeholders, column.id]);
-
-    const handleItemRender = (stakeholderId: string, rendered: boolean) => {
-        if (rendered) {
-            renderedItemsRef.current.add(stakeholderId);
-        } else {
-            renderedItemsRef.current.delete(stakeholderId);
+        if (!chunks || chunks.length === 0) {
+            return column.id === 'not_processed';
         }
-        setVisibleCount(renderedItemsRef.current.size);
-    };
+
+        const filteredEmails = allEmails.filter(email => {
+            if (email.stakeholderId && email.stakeholderId === stakeholder.id) {
+                return true;
+            }
+            if (stakeholder.contact_info) {
+                return email.toRecipients.some(
+                    recipient => recipient.address.toLowerCase().trim() === stakeholder.contact_info.toLowerCase().trim()
+                );
+            }
+            return false;
+        });
+
+        const allMentions = chunks.flatMap(chunk => chunk.stakeholder_mentions);
+        const allProcessed = allMentions.length > 0 && allMentions.every(mention => mention.checked);
+
+        if (!allProcessed) {
+            return column.id === 'not_processed';
+        }
+
+        if (filteredEmails.length === 0) {
+            return column.id === 'not_contacted';
+        }
+
+        // Check if any email has replies
+        const hasReplies = filteredEmails.some(email => email.replyCount && email.replyCount > 0);
+
+        if (hasReplies) {
+            return column.id === 'responded';
+        }
+
+        const mostRecentEmail = filteredEmails.sort((a, b) =>
+            new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()
+        )[0];
+
+        const emailTime = new Date(mostRecentEmail.sentAt).getTime();
+        const now = Date.now();
+        const hoursSinceEmail = (now - emailTime) / (1000 * 60 * 60);
+
+        if (hoursSinceEmail > 1) {
+            return column.id === 'contacted_old';
+        }
+
+        return column.id === 'contacted';
+    });
 
     return (
         <div className="flex-1 flex flex-col min-w-0 bg-gray-50 rounded-lg border-2 border-gray-200">
@@ -120,7 +168,7 @@ function StakeholderBoardColumn({
                     )}
                 </div>
                 <span className="px-2 py-0.5 rounded-full bg-gray-200 text-xs font-semibold text-gray-700 flex-shrink-0">
-                    {visibleCount}
+                    {stakeholdersInColumn.length}
                 </span>
             </div>
 
@@ -130,17 +178,35 @@ function StakeholderBoardColumn({
                     <div className="text-center py-8 text-gray-400 text-sm">
                         Geen belanghebbenden
                     </div>
+                ) : stakeholdersInColumn.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                        Geen items
+                    </div>
                 ) : (
-                    stakeholders.map(stakeholder => (
-                        <StakeholderBoardItem
-                            key={stakeholder.id}
-                            stakeholder={stakeholder}
-                            targetStatus={column.id}
-                            caseId={caseId}
-                            onClick={() => onSelectStakeholder(stakeholder.id)}
-                            onRender={(id, rendered) => handleItemRender(id, rendered)}
-                        />
-                    ))
+                    stakeholdersInColumn.map(stakeholder => {
+                        const filteredEmails = allEmails.filter(email => {
+                            if (email.stakeholderId && email.stakeholderId === stakeholder.id) {
+                                return true;
+                            }
+                            if (stakeholder.contact_info) {
+                                return email.toRecipients.some(
+                                    recipient => recipient.address.toLowerCase().trim() === stakeholder.contact_info.toLowerCase().trim()
+                                );
+                            }
+                            return false;
+                        });
+
+                        return (
+                            <StakeholderBoardItem
+                                key={stakeholder.id}
+                                stakeholder={stakeholder}
+                                targetStatus={column.id}
+                                onClick={() => onSelectStakeholder(stakeholder.id)}
+                                chunks={allMentionsMap.get(stakeholder.id) || []}
+                                sentEmails={filteredEmails}
+                            />
+                        );
+                    })
                 )}
             </div>
         </div>
