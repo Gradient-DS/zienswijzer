@@ -6,6 +6,7 @@ on:
       ip:
         description: 'ip address of the production server'
         type: string
+        required: true
       domain:
         description: 'Domain of the production server'
         type: string
@@ -25,9 +26,11 @@ on:
         default: latest
 
 env:
-  SSH_PRIVATE_KEY_PROD: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
+  DEPLOY_VM_PRIVATE_SSH_KEY: ${{ secrets.DEPLOY_VM_PRIVATE_SSH_KEY }}
   GRADIENT_MAIL: ${{ secrets.GRADIENT_MAIL }}
-  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+  GH_PAT: ${{ secrets.GH_PAT }}
 
 jobs:
   production:
@@ -37,6 +40,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GH_PAT }}
 
       - name: Wait for SSH (port 22)
         run: |
@@ -50,10 +60,10 @@ jobs:
       - name: Prepare SSH key
         id: ssh
         env:
-          SSH_PRIVATE_KEY_PROD: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
+          DEPLOY_VM_PRIVATE_SSH_KEY: ${{ secrets.DEPLOY_VM_PRIVATE_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY_PROD" > ~/.ssh/id_do
+          echo "$DEPLOY_VM_PRIVATE_SSH_KEY" > ~/.ssh/id_do
           chmod 600 ~/.ssh/id_do
           echo "key_path=$HOME/.ssh/id_do" >> $GITHUB_OUTPUT
       - name: Select SSH control user
@@ -289,91 +299,40 @@ jobs:
           REMOTE
       - name: Upload repository and runtime env
         env:
-          API_VERSION: ${{ inputs.api_version }}
-          FRONTEND_VERSION: ${{ inputs.frontend_version }}
-          GH_PAT: ${{ secrets.GH_PAT }}
+          MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
+          MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
+          MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
+          MICROSOFT_REDIRECT_URI: ${{ secrets.MICROSOFT_REDIRECT_URI }}
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          GRADIENT_MAIL: ${{ secrets.GRADIENT_MAIL }}
-          POSTGRES_DB: ${{ secrets.postgres_db }}
-          POSTGRES_USER: ${{ secrets.postgres_user }}
-          POSTGRES_PASSWORD: ${{ secrets.postgres_password }}
-          GKN_API_KEY: ${{ secrets.GKN_API_KEY }}
-          VECTOR_API_URL: ${{ secrets.VECTOR_API_URL }}
-          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
-          ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          MODEL_PROVIDER: ${{ secrets.MODEL_PROVIDER }}
-          HF_KEY: ${{ secrets.HF_KEY }}
-          UBIOPS_KEY: ${{ secrets.UBIOPS_KEY }}
-          FLASK_SECRET_KEY: ${{ secrets.FLASK_SECRET_KEY }}
+          GH_PAT: ${{ secrets.GH_PAT }}
 
         run: |
           set -euo pipefail
           ip=${{ inputs.ip }}
           fqdn=${{ inputs.domain }}
           user=${{ steps.final_user.outputs.ssh_user }}
-          owner_lc=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           git archive --format=tar.gz -o repo.tar.gz HEAD
           scp -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" repo.tar.gz "$user@$ip:/home/$user/repo.tar.gz"
+          
+          # Create backend/.env with Microsoft OAuth credentials
           {
-            printf 'FQDN=%q\n' "$fqdn"
-            printf 'IP=%q\n' "$ip"
-            printf 'API_VERSION=%q\n' "$API_VERSION"
-            printf 'FRONTEND_VERSION=%q\n' "$FRONTEND_VERSION"
-            printf 'REGISTRY=%q\n' "ghcr.io"
-            printf 'IMAGE_NAME_API=%q\n' "${owner_lc}/woo-api"
-            printf 'IMAGE_NAME_FRONTEND=%q\n' "${owner_lc}/woo-frontend"
-            printf 'GITHUB_REPOSITORY_OWNER=%q\n' "${owner_lc}"
-            printf 'GH_PAT=%q\n' "$GH_PAT"
-            printf 'GHCR_USERNAME=%q\n' "$GHCR_USERNAME"
-            printf 'SLACK_WEBHOOK_URL=%q\n' "$SLACK_WEBHOOK_URL"
-            printf 'GRADIENT_MAIL=%q\n' "$GRADIENT_MAIL"
-            # Database
-            printf 'POSTGRES_DB=%q\n' "${POSTGRES_DB}"
-            printf 'POSTGRES_USER=%q\n' "${POSTGRES_USER}"
-            printf 'POSTGRES_PASSWORD=%q\n' "${POSTGRES_PASSWORD}"
-            # API Keys
-            printf 'GKN_API_KEY=%q\n' "${GKN_API_KEY}"
-            printf 'HF_KEY=%q\n' "${HF_KEY}"
-            printf 'UBIOPS_KEY=%q\n' "${UBIOPS_KEY}"
-            printf 'FLASK_SECRET_KEY=%q\n' "${FLASK_SECRET_KEY}"
-            # Vector API
-            printf 'VECTOR_API_URL=%q\n' "${VECTOR_API_URL}"
-            # Frontend
-            printf 'FRONTEND_URL=%q\n' "${FRONTEND_URL}"
-            # Admin bootstrap
-            printf 'ADMIN_NAME=%q\n' "${ADMIN_NAME}"
-            printf 'ADMIN_EMAIL=%q\n' "${ADMIN_EMAIL}"
-            printf 'ADMIN_PASSWORD=%q\n' "${ADMIN_PASSWORD}"
-            # Model provider
-            printf 'MODEL_PROVIDER=%q\n' "${MODEL_PROVIDER}"
-          } > .remote.env
-          scp -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" .remote.env "$user@$ip:/home/$user/.remote.env"
-      - name: Authenticate to GHCR on remote
-        run: |
-          ip=${{ inputs.ip }}
-          user=${{ steps.final_user.outputs.ssh_user }}
-          ssh -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" "$user@$ip" bash -lc '
-            set -euo pipefail
-            HOMEDIR="$HOME"
-            [ -f "$HOME/.remote.env" ] && . "$HOME/.remote.env" || true
-            USERNAME="${GHCR_USERNAME:-${GITHUB_ACTOR:-}}"
-            TOKEN="${GH_PAT:-}"
-            if [ -z "$TOKEN" ]; then
-              echo "GH_PAT not set; cannot login to GHCR." >&2
-              exit 1
-            fi
-            mkdir -p "$HOME/.docker" && chmod 700 "$HOME/.docker"
-            docker logout ghcr.io >/dev/null 2>&1 || true
-            echo "$TOKEN" | docker login ghcr.io -u "$USERNAME" --password-stdin
-            echo "Logged into GHCR as $USERNAME ($USER)"
-            sudo mkdir -p /root/.docker && sudo chmod 700 /root/.docker
-            sudo docker logout ghcr.io >/dev/null 2>&1 || true
-            echo "$TOKEN" | sudo docker login ghcr.io -u "$USERNAME" --password-stdin
-            echo "Logged into GHCR as $USERNAME (root)"
-          '
+            printf 'MICROSOFT_CLIENT_ID=%q\n' "${MICROSOFT_CLIENT_ID}"
+            printf 'MICROSOFT_CLIENT_SECRET=%q\n' "${MICROSOFT_CLIENT_SECRET}"
+            printf 'MICROSOFT_TENANT_ID=%q\n' "${MICROSOFT_TENANT_ID}"
+            printf 'MICROSOFT_REDIRECT_URI=%q\n' "${MICROSOFT_REDIRECT_URI}"
+          } > backend.env
+          scp -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" backend.env "$user@$ip:/home/$user/backend.env"
+          
+          # Store FQDN for nginx config
+          echo "FQDN=$fqdn" > fqdn.env
+          scp -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" fqdn.env "$user@$ip:/home/$user/fqdn.env"
+          
+          # Configure GHCR credentials on remote server
+          ssh -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" "$user@$ip" bash -s <<REMOTE
+          set -euo pipefail
+          echo "${GH_PAT}" | sudo docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+          REMOTE
+          
       - name: Remote bootstrap (extract repo, set nginx server_name)
         run: |
           ip=${{ inputs.ip }}
@@ -384,14 +343,18 @@ jobs:
             rm -rf "$HOME/repo" && mkdir -p "$HOME/repo"
             tar -xzf "$HOME/repo.tar.gz" -C "$HOME/repo"
             cd "$HOME/repo"
-            [ -f "$HOME/.remote.env" ] && . "$HOME/.remote.env" || true
-            : "${FQDN:?missing FQDN in .remote.env}"
+            
+            # Load FQDN for nginx config
+            [ -f "$HOME/fqdn.env" ] && . "$HOME/fqdn.env" || true
+            : "${FQDN:?missing FQDN in fqdn.env}"
             sed -i "s/SERVER_NAME_PLACEHOLDER/${FQDN}/g" nginx/nginx.conf
             sed -i "s/SERVER_NAME_PLACEHOLDER/${FQDN}/g" nginx/nginx-acme.conf
-            # Ensure Compose picks up environment automatically
-            if [ -f "$HOME/.remote.env" ]; then
-              cp -f "$HOME/.remote.env" "$HOME/repo/.env"
-              chmod 0644 "$HOME/repo/.env" || true
+            
+            # Place backend.env into backend/.env
+            if [ -f "$HOME/backend.env" ]; then
+              mkdir -p "$HOME/repo/backend"
+              cp -f "$HOME/backend.env" "$HOME/repo/backend/.env"
+              chmod 0644 "$HOME/repo/backend/.env" || true
             fi
           '
       - name: Wait for DNS propagation (A record)
@@ -418,20 +381,25 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" "$user@$ip" bash -lc '
             set -euo pipefail
             cd "$HOME/repo"
-            [ -f "$HOME/.remote.env" ] && . "$HOME/.remote.env" || true
+            
+            # Load FQDN
+            [ -f "$HOME/fqdn.env" ] && . "$HOME/fqdn.env" || true
             : "${GRADIENT_MAIL:=}"
             if [ -z "$GRADIENT_MAIL" ]; then echo "GRADIENT_MAIL not set; skipping cert issuance"; exit 0; fi
+            
             # Start nginx with ACME config
-            sudo docker compose --env-file "$HOME/.remote.env" -f docker-compose.prod.yaml pull nginx
-            sudo docker compose --env-file "$HOME/.remote.env" -f docker-compose.prod.yaml up -d --no-deps nginx
+            sudo docker compose -f docker-compose.prod.yaml pull nginx
+            sudo docker compose -f docker-compose.prod.yaml up -d --no-deps nginx
             sudo docker cp "$HOME/repo/nginx/nginx-acme.conf" nginx-prod:/etc/nginx/conf.d/default.conf
             sudo docker exec nginx-prod nginx -t
             sudo docker exec nginx-prod nginx -s reload
+            
             # Ensure HTTP reachable
             for i in $(seq 1 60); do
               if curl -fsS "http://$FQDN/" >/dev/null 2>&1; then break; fi
               sleep 2
             done
+            
             # Issue cert via HTTP-01 using host persistence
             sudo mkdir -p /srv/woo/letsencrypt /srv/woo/certbot-www /srv/woo/letsencrypt-log
             sudo docker run --rm \
@@ -477,8 +445,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" "$user@$ip" bash -lc '
             set -euo pipefail
             cd "$HOME/repo" || exit 0
-            [ -f "$HOME/.remote.env" ] && . "$HOME/.remote.env" || true
-            sudo docker compose --env-file "$HOME/.remote.env" -f docker-compose.prod.yaml down --remove-orphans || true
+            sudo docker compose -f docker-compose.prod.yaml down --remove-orphans || true
             sudo docker container prune -f || true
             sudo docker image prune -af || true
             sudo docker network prune -f || true
@@ -491,12 +458,9 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" "$user@$ip" bash -lc '
             set -euo pipefail
             cd "$HOME/repo"
-            . "$HOME/.remote.env"
-            export API_VERSION
-            export FRONTEND_VERSION
-            sudo docker compose --env-file "$HOME/.remote.env" -f docker-compose.prod.yaml pull
-            sudo docker compose --env-file "$HOME/.remote.env" -f docker-compose.prod.yaml up -d
-            sudo docker compose --env-file "$HOME/.remote.env" -f docker-compose.prod.yaml ps
+            sudo docker compose -f docker-compose.prod.yaml pull
+            sudo docker compose -f docker-compose.prod.yaml up -d
+            sudo docker compose -f docker-compose.prod.yaml ps
           '
       - name: Switch Nginx to HTTPS config
         run: |
@@ -506,7 +470,6 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i "${{ steps.ssh.outputs.key_path }}" "$user@$ip" bash -lc '
             set -euo pipefail
             cd "$HOME/repo"
-            . "$HOME/.remote.env"
             sudo docker cp nginx/nginx.conf nginx-prod:/etc/nginx/conf.d/default.conf
             sudo docker exec nginx-prod nginx -t
             sudo docker exec nginx-prod nginx -s reload
