@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from '@/components/features/Sidebar';
 import { useUIStore } from '@/store';
-import { useCase } from '@/api/cases';
+import { useCase, useCases } from '@/api/cases';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
 import {
@@ -21,9 +21,11 @@ export default function HomePage() {
     const searchParams = new URLSearchParams(location.search);
     const selectedDocumentId = searchParams.get('document') || undefined;
     const { data: caseData } = useCase(selectedCaseId);
+    const { data: cases, isLoading: isLoadingCases } = useCases();
     const { isSidebarOpen, toggleSidebar, setSidebarOpen } = useUIStore();
     const [isMobile, setIsMobile] = useState(false);
     const hasAutoSelectedRef = useRef<string | undefined>(undefined);
+    const hasAutoNavigatedRef = useRef(false);
 
     const handleSelectDocument = useCallback((documentId: string) => {
         if (selectedCaseId) {
@@ -62,6 +64,15 @@ export default function HomePage() {
             hasAutoSelectedRef.current = undefined;
         }
     }, [selectedCaseId, caseData?.documents, selectedDocumentId, handleSelectDocument]);
+
+    useEffect(() => {
+        if (!isLoadingCases && cases && cases.length === 0 && location.pathname === '/home' && !hasAutoNavigatedRef.current) {
+            hasAutoNavigatedRef.current = true;
+            navigate('/cases/new?step=create', { replace: true });
+        } else if (cases && cases.length > 0) {
+            hasAutoNavigatedRef.current = false;
+        }
+    }, [cases, isLoadingCases, location.pathname, navigate]);
 
     const sidebarContent = (
         <Sidebar
@@ -112,7 +123,7 @@ export default function HomePage() {
                             <Button
                                 variant="outline"
                                 size="icon"
-                                className="fixed top-4 left-4 z-50"
+                                className="fixed top-5 left-4 z-50"
                                 onClick={toggleSidebar}
                             >
                                 <Menu className="h-5 w-5" />
