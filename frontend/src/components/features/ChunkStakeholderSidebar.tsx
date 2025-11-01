@@ -2,10 +2,9 @@ import { useMemo, useEffect, useRef, useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { X, Trash2, ArrowDown, ArrowUp, ArrowRight, Check } from 'lucide-react';
-import { useVerifyMention, useBulkVerifyMentions, useRemoveMention } from '@/api/verification';
+import { X, Trash2, ArrowDown, ArrowUp, ArrowRight, Check, Loader2 } from 'lucide-react';
+import { useVerifyMention, useRemoveMention, useBulkAcceptMentions } from '@/api/verification';
 import { useDocumentCompletionStatus } from '@/api/cases';
 import type { ChunkDetail, StakeholderMention } from '@/types';
 import { cn } from '@/lib/utils';
@@ -20,6 +19,7 @@ interface ChunkStakeholderSidebarProps {
     onNextDocument?: () => void;
     allDocuments?: Array<{ id: string; chunks?: ChunkDetail[] }>;
     onNavigateToNextStep?: () => void;
+    isDocumentProcessing?: boolean;
 }
 
 
@@ -125,15 +125,17 @@ export function ChunkStakeholderSidebar({
     onNextDocument,
     allDocuments,
     onNavigateToNextStep,
+    isDocumentProcessing = false,
 }: ChunkStakeholderSidebarProps) {
     const sidebarRef = useRef<HTMLDivElement>(null);
     const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
     const verifyMention = useVerifyMention();
-    const bulkVerify = useBulkVerifyMentions();
+    const bulkAcceptMentions = useBulkAcceptMentions();
     const location = useLocation();
     const resolvedCaseId = caseId || location.pathname.match(/\/cases\/([^/]+)/)?.[1];
     const { data: documentCompletionStatus } = useDocumentCompletionStatus(resolvedCaseId);
-    const [bulkThreshold, setBulkThreshold] = useState(70);
+    const [bulkThreshold, setBulkThreshold] = useState(80);
+    const [isBulkAccepting, setIsBulkAccepting] = useState(false);
 
     const allMentions = useMemo(() => {
         const mentions: Array<{
@@ -141,11 +143,23 @@ export function ChunkStakeholderSidebar({
             chunk: ChunkDetail;
         }> = [];
 
+        // Debug logging
+        if (import.meta.env.DEV) {
+            console.log('[ChunkStakeholderSidebar] Computing allMentions from chunks:', chunks.length);
+            console.log('[ChunkStakeholderSidebar] isDocumentProcessing:', isDocumentProcessing);
+        }
+
         chunks.forEach((chunk) => {
-            chunk.stakeholder_mentions.forEach((mention) => {
-                mentions.push({ mention, chunk });
-            });
+            if (chunk.stakeholder_mentions && Array.isArray(chunk.stakeholder_mentions)) {
+                chunk.stakeholder_mentions.forEach((mention) => {
+                    mentions.push({ mention, chunk });
+                });
+            }
         });
+
+        if (import.meta.env.DEV) {
+            console.log('[ChunkStakeholderSidebar] Total mentions found:', mentions.length);
+        }
 
         return mentions.sort((a, b) => {
             if (a.chunk.page !== b.chunk.page) {
@@ -161,7 +175,7 @@ export function ChunkStakeholderSidebar({
             }
             return aX - bX;
         });
-    }, [chunks]);
+    }, [chunks, isDocumentProcessing]);
 
     const mentionsByPage = useMemo(() => {
         const grouped = new Map<number, typeof allMentions>();
@@ -301,28 +315,53 @@ export function ChunkStakeholderSidebar({
         }
 
         const threshold = bulkThreshold / 100;
-        const mentionsToAccept = uncheckedMentions.filter(
-            ({ mention }) => mention.confidence >= threshold
+
+        // Use current document mentions only (simple and works)
+        const allCaseMentions = allMentions;
+
+        console.log('[BulkAccept] Total mentions in current document:', allCaseMentions.length);
+        console.log('[BulkAccept] Threshold:', threshold, `(${bulkThreshold}%)`);
+
+        // Debug: log first few mentions to check confidence values
+        if (allCaseMentions.length > 0) {
+            console.log('[BulkAccept] Sample mentions:', allCaseMentions.slice(0, 5).map(m => ({
+                id: m.mention.id.substring(0, 8),
+                confidence: m.mention.confidence,
+                checked: m.mention.checked
+            })));
+        }
+
+        // Filter to unchecked mentions above threshold
+        const mentionsToAccept = allCaseMentions.filter(
+            ({ mention }) => !mention.checked && mention.confidence >= threshold
         );
+
+        console.log('[BulkAccept] Mentions to accept:', mentionsToAccept.length);
+        console.log('[BulkAccept] Breakdown:');
+        console.log('  - Total mentions:', allCaseMentions.length);
+        console.log('  - Unchecked:', allCaseMentions.filter(m => !m.mention.checked).length);
+        console.log('  - Above threshold:', allCaseMentions.filter(m => m.mention.confidence >= threshold).length);
+        console.log('  - Both conditions:', mentionsToAccept.length);
 
         if (mentionsToAccept.length === 0) {
             alert(`Geen vermeldingen gevonden met confidence >= ${bulkThreshold}%`);
             return;
         }
 
+        const mentionIds = mentionsToAccept.map(({ mention }) => mention.id);
+
+        setIsBulkAccepting(true);
         try {
-            for (const { mention } of mentionsToAccept) {
-                await verifyMention.mutateAsync({
-                    mentionId: mention.id,
-                    checked: true,
-                    accepted: true,
-                    rejected: null,
-                    caseId: resolvedCaseId,
-                });
-            }
+            // Use optimistic update hook - UI updates instantly!
+            await bulkAcceptMentions.mutateAsync({
+                mentionIds,
+                caseId: resolvedCaseId,
+            });
         } catch (error) {
             console.error('Failed to bulk accept:', error);
             alert('Bulk acceptatie mislukt.');
+        } finally {
+            setIsBulkAccepting(false);
         }
     };
 
@@ -481,9 +520,23 @@ export function ChunkStakeholderSidebar({
                         </div>
                     </div>
                     <div className="flex items-center justify-center py-8">
-                        <div className="text-sm text-gray-500 text-center">
-                            Geen stakeholder vermeldingen gevonden
-                        </div>
+                        {isDocumentProcessing ? (
+                            <div className="space-y-4 text-center">
+                                <Loader2 className="h-12 w-12 text-gray-400 animate-spin mx-auto" />
+                                <div className="space-y-2">
+                                    <div className="text-sm font-medium text-gray-700">
+                                        Document wordt verwerkt
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                        Belanghebbenden worden geïdentificeerd...
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-sm text-gray-500 text-center">
+                                Geen stakeholder vermeldingen gevonden
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -533,31 +586,40 @@ export function ChunkStakeholderSidebar({
 
                         {uncheckedMentions.length > 0 ? (
                             resolvedCaseId && (
-                                <div className="flex items-center gap-2">
-                                    <Label htmlFor="bulk-threshold" className="text-xs font-medium text-gray-700 whitespace-nowrap">
-                                        Accepteer boven:
-                                    </Label>
-                                    <Input
-                                        id="bulk-threshold"
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        value={bulkThreshold}
-                                        onChange={(e) => setBulkThreshold(Number(e.target.value))}
-                                        className="h-7 w-20 text-xs pr-3 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-                                        onClick={(e) => e.stopPropagation()}
-                                    />
-                                    <span className="text-xs text-gray-600">%</span>
-                                    <Button
-                                        variant="default"
-                                        size="sm"
-                                        onClick={handleBulkAccept}
-                                        disabled={bulkVerify.isPending}
-                                        className="h-7 w-7 p-0 flex-shrink-0"
-                                        title={`Accepteer ${uncheckedMentions.filter(({ mention }) => mention.confidence >= bulkThreshold / 100).length} vermeldingen`}
-                                    >
-                                        <Check className="h-4 w-4" />
-                                    </Button>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="bulk-threshold" className="text-xs font-medium text-gray-700">
+                                            Accepteer boven:
+                                        </Label>
+                                        <span className="text-xs font-semibold text-gray-900">{bulkThreshold}%</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            id="bulk-threshold"
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            step="10"
+                                            value={bulkThreshold}
+                                            onChange={(e) => setBulkThreshold(Number(e.target.value))}
+                                            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                        <Button
+                                            variant="default"
+                                            size="sm"
+                                            onClick={handleBulkAccept}
+                                            disabled={isBulkAccepting}
+                                            className="h-7 w-7 p-0 flex-shrink-0"
+                                            title={`Accepteer alle vermeldingen boven ${bulkThreshold}% in dit document`}
+                                        >
+                                            {isBulkAccepting ? (
+                                                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                            ) : (
+                                                <Check className="h-4 w-4" />
+                                            )}
+                                        </Button>
+                                    </div>
                                 </div>
                             )
                         ) : (

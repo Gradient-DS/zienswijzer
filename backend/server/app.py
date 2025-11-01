@@ -501,6 +501,7 @@ class DocumentStatus(BaseModel):
     document_title: str
     is_ok: bool  # True if all stakeholders agree or no objections
     objected_chunks: List[ObjectedChunk]
+    stakeholder_ids: List[str]  # List of stakeholder IDs mentioned in this document
 
 
 class StakeholderResponse(BaseModel):
@@ -586,6 +587,7 @@ def get_case_overview(case_id: str):
         # Get all chunks for this document with case-specific verification status
         chunks = db.get_chunks_by_document(doc_id)
         objected_chunks = []
+        document_stakeholder_ids = set()  # Track unique stakeholders in this document
 
         for chunk in chunks:
             # Get stakeholder mentions for this chunk with case verification
@@ -594,6 +596,7 @@ def get_case_overview(case_id: str):
             for cs in chunk_stakeholders:
                 stakeholder_id = cs["stakeholder_id"]
                 all_stakeholder_ids.add(stakeholder_id)
+                document_stakeholder_ids.add(stakeholder_id)  # Track for this document
 
                 # Check if this mention is objected (verified=False in CaseChunkStakeholderVerification)
                 verification_status = db.get_case_mention_verification(case_id, cs["id"])
@@ -621,6 +624,7 @@ def get_case_overview(case_id: str):
                 document_title=doc["title"],
                 is_ok=(len(objected_chunks) == 0),
                 objected_chunks=objected_chunks,
+                stakeholder_ids=list(document_stakeholder_ids),
             )
         )
 
@@ -1008,7 +1012,7 @@ class UpdateStakeholderPublicationStatusRequest(BaseModel):
     publication_status: Optional[str] = None  # 'agree', 'disagree', 'pending', or None
 
 
-class StakeholderResponse(BaseModel):
+class SingleStakeholderResponse(BaseModel):
     stakeholder: Stakeholder
 
 
@@ -1083,14 +1087,14 @@ def get_stakeholders():
     return StakeholderListResponse(stakeholders=stakeholders)
 
 
-@app.get("/stakeholders/{stakeholder_id}", response_model=StakeholderResponse)
+@app.get("/stakeholders/{stakeholder_id}", response_model=SingleStakeholderResponse)
 def get_stakeholder(stakeholder_id: str):
     """Get a stakeholder by ID"""
     stakeholder = db.get_stakeholder_by_id(stakeholder_id)
     if not stakeholder:
         raise HTTPException(status_code=404, detail="Stakeholder not found")
 
-    return StakeholderResponse(
+    return SingleStakeholderResponse(
         stakeholder=Stakeholder(
             id=stakeholder["id"],
             type=stakeholder.get("type"),
@@ -1103,7 +1107,7 @@ def get_stakeholder(stakeholder_id: str):
     )
 
 
-@app.patch("/stakeholders/{stakeholder_id}/publication-status", response_model=StakeholderResponse)
+@app.patch("/stakeholders/{stakeholder_id}/publication-status", response_model=SingleStakeholderResponse)
 def update_stakeholder_publication_status(stakeholder_id: str, request: UpdateStakeholderPublicationStatusRequest):
     """Update a stakeholder's publication status"""
     # Validate publication_status value if provided
@@ -1125,7 +1129,7 @@ def update_stakeholder_publication_status(stakeholder_id: str, request: UpdateSt
 
     # Return updated stakeholder
     updated_stakeholder = db.get_stakeholder_by_id(stakeholder_id)
-    return StakeholderResponse(
+    return SingleStakeholderResponse(
         stakeholder=Stakeholder(
             id=updated_stakeholder["id"],
             type=updated_stakeholder.get("type"),
