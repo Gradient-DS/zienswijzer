@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "zienswijzer.fullname" . }}-api
+  labels:
+    {{- include "zienswijzer.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "zienswijzer.componentSelectorLabels" (dict "ctx" . "component" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "zienswijzer.componentSelectorLabels" (dict "ctx" . "component" "api") | nindent 8 }}
+      annotations:
+        # Roll pods when the rendered config/secret changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-api.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: api
+          image: "{{ .Values.image.api.repository }}:{{ .Values.image.api.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.api.port }}
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: {{ include "zienswijzer.fullname" . }}-api
+          env:
+            - name: MICROSOFT_REDIRECT_URI
+              value: {{ .Values.config.microsoft.redirectUri | quote }}
+            - name: MICROSOFT_GRAPH_API_ENDPOINT
+              value: {{ .Values.config.microsoft.graphApiEndpoint | quote }}
+            - name: MICROSOFT_SCOPES
+              value: {{ .Values.config.microsoft.scopes | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.resources.api | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false  # SQLite writes into /app/server/db
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: flask-session
+              mountPath: /app/flask_session
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.persistence.enabled }}
+            - name: db
+              mountPath: /app/server/db
+            {{- end }}
+      volumes:
+        - name: flask-session
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.persistence.enabled }}
+        - name: db
+          persistentVolumeClaim:
+            claimName: {{ include "zienswijzer.fullname" . }}-db
+        {{- end }}
