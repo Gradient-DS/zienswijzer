@@ -1114,9 +1114,8 @@ for i in $(seq 1 30); do
 done
 
 curl -fs http://127.0.0.1:18000/openapi.json -o /tmp/openapi.json
-# Convert JSON -> YAML (python is ubiquitous; PyYAML may need installing).
-python3 -c 'import json,sys,yaml; yaml.safe_dump(json.load(open("/tmp/openapi.json")), open("docs/openapi.yaml","w"), sort_keys=False)' \
-  || python3 -c 'import json; open("docs/openapi.yaml","w").write(json.dumps(json.load(open("/tmp/openapi.json")), indent=2))'
+# Convert JSON -> YAML with yq (the local Homebrew python lacks PyYAML and pip is broken).
+yq -p=json -o=yaml /tmp/openapi.json > docs/openapi.yaml
 echo "Wrote docs/openapi.yaml"
 ```
 
@@ -1194,8 +1193,16 @@ spec:
 
 - [ ] **Step 6: Validate appstore.yaml is well-formed YAML and required fields present**
 
-Run: `python3 -c 'import yaml,sys; d=yaml.safe_load(open("appstore.yaml")); assert d["metadata"]["name"]=="zienswijzer"; assert d["spec"]["ai"]["data_residency"]=="EU"; assert d["metadata"]["license"]=="EUPL-1.2"; import re; assert re.fullmatch(r"[a-z0-9-]{3,60}", d["metadata"]["name"]); print("appstore.yaml OK")'`
-Expected: `appstore.yaml OK`.
+Run (uses `yq`, since local python lacks PyYAML):
+```bash
+name=$(yq '.metadata.name' appstore.yaml)
+res=$(yq '.spec.ai.data_residency' appstore.yaml)
+lic=$(yq '.metadata.license' appstore.yaml)
+[ "$res" = "EU" ] && [ "$lic" = "EUPL-1.2" ] \
+  && echo "$name" | grep -Eq '^[a-z0-9-]{3,60}$' \
+  && echo "appstore.yaml OK" || echo "appstore.yaml INVALID"
+```
+Expected: `appstore.yaml OK` (yq also fails loudly if the YAML is malformed).
 
 - [ ] **Step 7: Commit**
 
