@@ -1,0 +1,33 @@
+apiVersion: appstore.saidkick.nl/v1
+kind: AppManifest
+metadata:
+  name: zienswijzer                 # immutable slug, 3-60 chars, a-z0-9-
+  display_name: Zienswijzer
+  vendor: Gradient
+  contact: lex@gradient-ds.com
+  license: EUPL-1.2
+spec:
+  chart:
+    path: chart/
+    type: helm
+  categories:
+    - document        # TODO(open-item-2): no allowed enum in the manual; adjust if validation rejects.
+    - productivity
+  ai:
+    risk_class: limited
+    base_model: cross-encoder/nli-deberta-v3-small   # hardcoded zero-shot classifier (verified in code)
+    data_residency: EU
+  interfaces:
+    - type: api
+      openapi: docs/openapi.yaml
+  demo:
+    description: docs/description.md
+    screenshots:
+      - docs/screenshots/01-case-list.png
+      - docs/screenshots/02-case-overview.png
+      - docs/screenshots/03-document-detail.png
+  audit:
+    dpia: audit/dpia.pdf
+    security_scan: audit/security-scan.sarif
+    ai_risk: audit/ai-risk-assessment.pdf
+    accessibility: audit/accessibility-report.pdf
