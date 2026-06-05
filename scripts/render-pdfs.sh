@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Render audit markdown -> PDF using whatever is installed: pandoc -> weasyprint -> chrome.
+# Render audit markdown -> PDF. Tries pandoc direct; if pandoc has no PDF engine,
+# falls through to pandoc->HTML + weasyprint; else headless Chrome.
 render() {
   local md="$1" pdf="${1%.md}.pdf"
   if command -v pandoc >/dev/null; then
