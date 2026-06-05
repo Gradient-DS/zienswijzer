@@ -16,6 +16,7 @@ spec:
       annotations:
         # Roll pods when the rendered config/secret changes.
         checksum/config: {{ include (print $.Template.BasePath "/configmap-api.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret-api.yaml") . | sha256sum }}
     spec:
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:

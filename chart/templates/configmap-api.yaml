@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "zienswijzer.fullname" . }}-api
+  labels:
+    {{- include "zienswijzer.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+data:
+  # Informational config snapshot (the app is env-driven; this is not mounted).
+  config.yaml: |
+    database:
+      type: sqlite
+      path: /app/server/db/database.sqlite3
+    email:
+      enabled: {{ .Values.config.email.enabled }}
+      mock_mode: {{ .Values.config.email.mockMode }}
+    api:
+      host: 0.0.0.0
+      port: {{ .Values.service.api.port }}
+      debug: false
