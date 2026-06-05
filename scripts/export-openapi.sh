@@ -16,6 +16,11 @@ docker run -d --rm --name "$NAME" \
 echo "Waiting for the api to come up..."
 for i in $(seq 1 30); do
   if curl -fs http://127.0.0.1:18000/health >/dev/null 2>&1; then break; fi
+  if [ "$i" -eq 30 ]; then
+    echo "ERROR: api did not become healthy within 30s" >&2
+    docker logs "$NAME" 2>&1 | tail -20 >&2 || true
+    exit 1
+  fi
   sleep 1
 done
 
