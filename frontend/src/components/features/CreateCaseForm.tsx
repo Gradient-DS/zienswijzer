@@ -149,7 +149,7 @@ export function CreateCaseForm({ caseId }: CreateCaseFormProps) {
                                     type="text"
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
-                                    placeholder="Bijv. Environmental Impact Study"
+                                    placeholder="Bijv. Rattenbestrijding Haarlem"
                                     required
                                     disabled={isSubmitting}
                                     aria-describedby={createCase.error ? 'title-error' : undefined}
@@ -166,7 +166,7 @@ export function CreateCaseForm({ caseId }: CreateCaseFormProps) {
                                     type="text"
                                     value={description}
                                     onChange={(e) => setDescription(e.target.value)}
-                                    placeholder="Bijv. Comprehensive environmental assessment for new development"
+                                    placeholder="Bijv. Overzicht van de rattenbestrijding in Haarlem"
                                     required
                                     disabled={isSubmitting}
                                     aria-describedby={createCase.error ? 'description-error' : undefined}

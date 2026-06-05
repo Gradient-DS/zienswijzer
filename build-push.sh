@@ -9,6 +9,7 @@ PUSH=false
 API_VERSION="${API_VERSION:-latest}"
 FRONTEND_VERSION="${FRONTEND_VERSION:-latest}"
 REGISTRY="${REGISTRY:-ghcr.io}"
+PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 
 # Determine owner (priority: env var > hardcoded default)
 if [ -n "${GITHUB_REPOSITORY_OWNER:-}" ]; then
@@ -66,68 +67,79 @@ echo "Registry:          ${REGISTRY}"
 echo "Owner:             ${OWNER}"
 echo "API Version:       ${API_VERSION}"
 echo "Frontend Version:  ${FRONTEND_VERSION}"
+echo "Platforms:         ${PLATFORMS}"
 echo "Push to registry:  ${PUSH}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+# Setup buildx if not already configured
+echo "🔧 Setting up Docker Buildx..."
+if ! docker buildx inspect woo-builder >/dev/null 2>&1; then
+    echo "Creating new buildx builder 'woo-builder'..."
+    docker buildx create --name woo-builder --driver docker-container --bootstrap --use
+else
+    echo "Using existing buildx builder 'woo-builder'..."
+    docker buildx use woo-builder
+fi
+echo ""
+
+# Determine build action based on push flag
+if [ "$PUSH" = true ]; then
+    BUILD_ACTION="--push"
+    echo "📦 Building and pushing multi-arch images..."
+else
+    BUILD_ACTION="--load"
+    echo "📦 Building images locally (single arch)..."
+    echo "⚠️  Note: Local builds only support current platform."
+    echo "    Use --push to build multi-arch and push to registry."
+    PLATFORMS="linux/$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')"
+fi
+echo ""
+
 # Build API image
-echo "📦 Building API image..."
-docker build \
+echo "📦 Building API image for ${PLATFORMS}..."
+docker buildx build \
+    --platform "${PLATFORMS}" \
     -t "${API_IMAGE}:${API_VERSION}" \
     -t "${API_IMAGE}:latest" \
     -f backend/Dockerfile \
+    ${BUILD_ACTION} \
     ./backend
 
 echo "✅ API image built: ${API_IMAGE}:${API_VERSION}"
 echo ""
 
 # Build Frontend image
-echo "📦 Building Frontend image..."
-docker build \
+echo "📦 Building Frontend image for ${PLATFORMS}..."
+docker buildx build \
+    --platform "${PLATFORMS}" \
     -t "${FRONTEND_IMAGE}:${FRONTEND_VERSION}" \
     -t "${FRONTEND_IMAGE}:latest" \
     -f frontend/Dockerfile \
+    ${BUILD_ACTION} \
     ./frontend
 
 echo "✅ Frontend image built: ${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
 echo ""
 
-# Push if requested
-if [ "$PUSH" = true ]; then
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Pushing images to registry..."
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    
-    echo "⬆️  Pushing API image..."
-    docker push "${API_IMAGE}:${API_VERSION}"
-    docker push "${API_IMAGE}:latest"
-    echo "✅ API image pushed"
-    echo ""
-    
-    echo "⬆️  Pushing Frontend image..."
-    docker push "${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
-    docker push "${FRONTEND_IMAGE}:latest"
-    echo "✅ Frontend image pushed"
-    echo ""
-fi
-
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅ Done!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Built images:"
-echo "  ${API_IMAGE}:${API_VERSION}"
-echo "  ${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
 
-if [ "$PUSH" = false ]; then
+if [ "$PUSH" = true ]; then
+    echo "Pushed multi-arch images (${PLATFORMS}):"
+    echo "  ${API_IMAGE}:${API_VERSION}"
+    echo "  ${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
     echo ""
-    echo "To push images to registry, run:"
+    echo "These images are now available for both amd64 (x86_64) and arm64 (Apple Silicon)."
+else
+    echo "Built images locally for current platform:"
+    echo "  ${API_IMAGE}:${API_VERSION}"
+    echo "  ${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
+    echo ""
+    echo "To build and push multi-arch images to registry, run:"
     echo "  $0 --push"
-    echo ""
-    echo "Or push manually:"
-    echo "  docker push ${API_IMAGE}:${API_VERSION}"
-    echo "  docker push ${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
 fi
 
 echo ""
