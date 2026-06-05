@@ -50,9 +50,10 @@ ingress:
     enabled: false
     secretName: ""
 
-# Optional persistence for the SQLite DB dir (/app/server/db).
-# Default OFF: use the image's baked-in seeded DB.
-# Enabling mounts an empty PVC over the seeded DB; init_db() recreates the schema (empty data).
+# Optional persistence for the SQLite DB (/app/server/db) AND uploaded documents
+# (/app/server/data), kept together on one PVC via subPaths so a DB record always
+# has its file. Default OFF: use the image's baked-in seeded DB on ephemeral storage.
+# Enabling mounts empty PVC subPaths over the seeded DB; init_db() recreates the schema (empty data).
 persistence:
   enabled: false
   size: 1Gi

@@ -5,6 +5,9 @@ metadata:
   name: {{ include "zienswijzer.fullname" . }}-db
   labels:
     {{- include "zienswijzer.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+  annotations:
+    # Retain persisted data (DB + uploaded documents) across `helm uninstall`.
+    helm.sh/resource-policy: keep
 spec:
   accessModes: ["ReadWriteOnce"]
   {{- if .Values.persistence.storageClassName }}
