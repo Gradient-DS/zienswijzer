@@ -92,12 +92,14 @@
       "properties": {
         "api": {
           "type": "object",
+          "required": ["port"],
           "properties": {
             "port": { "type": "integer", "default": 8000, "minimum": 1, "maximum": 65535 }
           }
         },
         "frontend": {
           "type": "object",
+          "required": ["port"],
           "properties": {
             "port": { "type": "integer", "default": 3000, "minimum": 1, "maximum": 65535 }
           }
