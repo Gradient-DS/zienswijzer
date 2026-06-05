@@ -63,7 +63,7 @@ spec:
             {{- toYaml .Values.resources.api | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false  # SQLite writes into /app/server/db
+            readOnlyRootFilesystem: false  # app writes SQLite into /app/server/db and uploads into /app/server/data
             capabilities:
               drop: ["ALL"]
           volumeMounts:
@@ -72,8 +72,14 @@ spec:
             - name: tmp
               mountPath: /tmp
             {{- if .Values.persistence.enabled }}
-            - name: db
+            # DB and uploaded documents share one PVC (subPaths) so a restored
+            # record always has its file — avoids dangling references.
+            - name: data
               mountPath: /app/server/db
+              subPath: db
+            - name: data
+              mountPath: /app/server/data
+              subPath: data
             {{- end }}
       volumes:
         - name: flask-session
@@ -81,7 +87,7 @@ spec:
         - name: tmp
           emptyDir: {}
         {{- if .Values.persistence.enabled }}
-        - name: db
+        - name: data
           persistentVolumeClaim:
             claimName: {{ include "zienswijzer.fullname" . }}-db
         {{- end }}
