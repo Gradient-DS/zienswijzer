@@ -1,12 +1,78 @@
-nameOverride: ""
-fullnameOverride: ""
-ingress:
-  enabled: false
-  host: ""
-  tls:
-    enabled: false
+# Default values for the Zienswijzer chart.
+# Secret values (MICROSOFT_* credentials) are intentionally EMPTY here — they are
+# supplied at deploy time via the platform's Vault (fields marked "format": secret
+# in values.schema.json). Never commit real secrets.
+
+replicaCount: 1
+
+image:
+  # TODO(open-item-5): replace "latest" with a concrete immutable released tag/digest
+  # before submission. TODO(open-item-4): confirm these images are PUBLIC on ghcr;
+  # if private, the platform/kind need an imagePullSecret.
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+  api:
+    repository: ghcr.io/gradient-ds/woo-api
+    tag: latest
+  frontend:
+    repository: ghcr.io/gradient-ds/woo-frontend
+    tag: latest
+
+# Non-secret backend configuration (rendered into the api ConfigMap / env).
+config:
+  email:
+    enabled: true
+    mockMode: false
+  # Non-secret MICROSOFT_* OAuth config (the three credentials are secrets — see below).
+  microsoft:
+    redirectUri: "http://localhost:8000/email/callback"
+    graphApiEndpoint: "https://graph.microsoft.com/v1.0"
+    scopes: "User.Read,Mail.Read,Mail.Send,Mail.ReadWrite"
+
+# Secret values — EMPTY by default; injected from Vault at deploy time.
+# REQUIRED for the api pod to start (pydantic BaseSettings has no defaults for these).
+secrets:
+  microsoftClientId: ""
+  microsoftClientSecret: ""
+  microsoftTenantId: ""
+
 service:
   api:
-    port: 8000
+    port: 8000        # the backend listens on 8000
   frontend:
     port: 3000
+
+ingress:
+  enabled: true
+  className: "nginx"
+  host: "zienswijzer.local"
+  tls:
+    enabled: false
+    secretName: ""
+
+# Optional persistence for the SQLite DB dir (/app/server/db).
+# Default OFF: use the image's baked-in seeded DB.
+# Enabling mounts an empty PVC over the seeded DB; init_db() recreates the schema (empty data).
+persistence:
+  enabled: false
+  size: 1Gi
+  storageClassName: ""
+
+resources:
+  api:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+  frontend:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+nameOverride: ""
+fullnameOverride: ""
