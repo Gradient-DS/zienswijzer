@@ -6,12 +6,16 @@ RELEASE="zw"
 HOST="zienswijzer.local"
 API_IMG="ghcr.io/gradient-ds/woo-api:latest"
 FE_IMG="ghcr.io/gradient-ds/woo-frontend:latest"
+# Host port the kind node's :80 is mapped to. Override if 8081 is taken on your
+# machine: `HOST_PORT=9090 ./scripts/kind-acceptance.sh`. (Port 80 is privileged,
+# so we map to an unprivileged host port and curl it with the Host header below.)
+HOST_PORT="${HOST_PORT:-8081}"
 
 cleanup() { kind delete cluster --name "$CLUSTER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-echo "==> Creating kind cluster with ingress-ready node"
-cat <<'EOF' | kind create cluster --name "$CLUSTER" --config -
+echo "==> Creating kind cluster with ingress-ready node (host port ${HOST_PORT})"
+cat <<EOF | kind create cluster --name "$CLUSTER" --config -
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
@@ -24,7 +28,7 @@ nodes:
             node-labels: "ingress-ready=true"
     extraPortMappings:
       - containerPort: 80
-        hostPort: 8081
+        hostPort: ${HOST_PORT}
         protocol: TCP
 EOF
 
@@ -59,11 +63,11 @@ kubectl wait --for=condition=ready pod \
 echo "==> Letting ingress endpoint sync (5s)"
 sleep 5
 
-echo "==> Acceptance checks via the ingress (Host header -> 127.0.0.1:8081)"
+echo "==> Acceptance checks via the ingress (Host header -> 127.0.0.1:${HOST_PORT})"
 fail=0
 
 echo "-- [4a] frontend HTML at /"
-code=$(curl -s -o /tmp/zw-root.html -w '%{http_code}' -H "Host: $HOST" http://127.0.0.1:8081/ || true)
+code=$(curl -s -o /tmp/zw-root.html -w '%{http_code}' -H "Host: $HOST" http://127.0.0.1:${HOST_PORT}/ || true)
 if [ "$code" = "200" ] && grep -qi "<div id=\"root\"\|<!doctype html\|<html" /tmp/zw-root.html; then
   echo "   OK ($code, HTML served)"
 else
@@ -71,11 +75,11 @@ else
 fi
 
 echo "-- [4b] GET /api/health -> 200 (proves /api rewrite contract)"
-code=$(curl -s -o /tmp/zw-health.json -w '%{http_code}' -H "Host: $HOST" http://127.0.0.1:8081/api/health || true)
+code=$(curl -s -o /tmp/zw-health.json -w '%{http_code}' -H "Host: $HOST" http://127.0.0.1:${HOST_PORT}/api/health || true)
 if [ "$code" = "200" ]; then echo "   OK ($code): $(cat /tmp/zw-health.json)"; else echo "   FAIL (status=$code)"; fail=1; fi
 
 echo "-- [5] real API round-trip: GET /api/cases"
-code=$(curl -s -o /tmp/zw-cases.json -w '%{http_code}' -H "Host: $HOST" http://127.0.0.1:8081/api/cases || true)
+code=$(curl -s -o /tmp/zw-cases.json -w '%{http_code}' -H "Host: $HOST" http://127.0.0.1:${HOST_PORT}/api/cases || true)
 if [ "$code" = "200" ] || [ "$code" = "401" ]; then
   echo "   OK ($code): reached api through ingress. Body: $(head -c 200 /tmp/zw-cases.json)"
 else
