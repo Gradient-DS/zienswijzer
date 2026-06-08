@@ -91,8 +91,13 @@ jobs:
             --severity HIGH,CRITICAL --format sarif \
             --output "trivy-${{ matrix.image }}.sarif" "${{ matrix.image }}:ci" || true
 
+      # Best-effort: only works when GitHub code scanning (Advanced Security) is
+      # enabled. continue-on-error so its absence never fails the job or blocks
+      # the publish below (the committed audit/security-scan.sarif is the
+      # source of truth the platform consumes).
       - name: Upload SARIF to Security tab
         if: always() && github.event_name == 'push' && hashFiles(format('trivy-{0}.sarif', matrix.image)) != ''
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
