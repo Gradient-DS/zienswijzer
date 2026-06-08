@@ -8,10 +8,10 @@ browser-only steps and the manual items that must be done before submitting.
 
 - [x] **RESOLVED — security gate.** Both images are now at **zero HIGH/CRITICAL**
       (CVSS ≥ 7.0) Trivy findings (`./scripts/trivy-scan.sh` ends with `GATE PASS`).
-      Remediation: `woo-api` runtime moved to a Chainguard **Wolfi** base (Debian/
+      Remediation: `zienswijzer-api` runtime moved to a Chainguard **Wolfi** base (Debian/
       distroless ship no-fix HIGH/CRITICAL CVEs such as `perl-base` CVE-2026-8376 @ 9.8
       and `ncurses` CVE-2025-69720 @ 7.8) and security-sensitive Python deps were
-      bumped in `backend/pyproject.toml` / `uv.lock`; `woo-frontend` final stage moved
+      bumped in `backend/pyproject.toml` / `uv.lock`; `zienswijzer-frontend` final stage moved
       to `nginx:alpine` (+ `apk upgrade`), which also drops the Node `serve` package
       and its CVEs. The committed `audit/security-scan.sarif` now covers HIGH+CRITICAL
       (empty results, ~1.4 KB). **NB:** the rebuilt images must be pushed to ghcr

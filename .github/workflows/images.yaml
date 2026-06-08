@@ -1,6 +1,6 @@
 name: Images — build, scan & publish
 
-# Builds the woo-api and woo-frontend images, gates them on a Trivy
+# Builds the zienswijzer-api and zienswijzer-frontend images, gates them on a Trivy
 # HIGH/CRITICAL (CVSS >= 7.0) scan — the same rule the sAId-Kick app store
 # auto-rejects on — and publishes to GHCR after a merge to main or a version
 # tag. Pull requests build + scan only (no publish), so a branch is verified
@@ -35,10 +35,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: woo-api
+          - image: zienswijzer-api
             context: backend
             dockerfile: backend/Dockerfile
-          - image: woo-frontend
+          - image: zienswijzer-frontend
             context: frontend
             dockerfile: frontend/Dockerfile
     steps:

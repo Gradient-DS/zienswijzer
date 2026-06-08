@@ -12,10 +12,10 @@ image:
   pullPolicy: IfNotPresent
   pullSecrets: []
   api:
-    repository: ghcr.io/gradient-ds/woo-api
+    repository: ghcr.io/gradient-ds/zienswijzer-api
     tag: latest
   frontend:
-    repository: ghcr.io/gradient-ds/woo-frontend
+    repository: ghcr.io/gradient-ds/zienswijzer-frontend
     tag: latest
 
 # Non-secret backend configuration (rendered into the api ConfigMap / env).

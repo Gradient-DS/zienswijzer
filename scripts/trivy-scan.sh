@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-API_IMG="${1:-ghcr.io/gradient-ds/woo-api:latest}"
-FE_IMG="${2:-ghcr.io/gradient-ds/woo-frontend:latest}"
+API_IMG="${1:-ghcr.io/gradient-ds/zienswijzer-api:latest}"
+FE_IMG="${2:-ghcr.io/gradient-ds/zienswijzer-frontend:latest}"
 OUT="audit/security-scan.sarif"
 
 echo "==> Trivy scan (SARIF, severity HIGH,CRITICAL) of both images"

@@ -57,8 +57,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Image names
-API_IMAGE="${REGISTRY}/${OWNER}/woo-api"
-FRONTEND_IMAGE="${REGISTRY}/${OWNER}/woo-frontend"
+API_IMAGE="${REGISTRY}/${OWNER}/zienswijzer-api"
+FRONTEND_IMAGE="${REGISTRY}/${OWNER}/zienswijzer-frontend"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Building WOO Docker Images"

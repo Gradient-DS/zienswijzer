@@ -4,8 +4,8 @@ set -euo pipefail
 CLUSTER="zienswijzer-test"
 RELEASE="zw"
 HOST="zienswijzer.local"
-API_IMG="ghcr.io/gradient-ds/woo-api:latest"
-FE_IMG="ghcr.io/gradient-ds/woo-frontend:latest"
+API_IMG="ghcr.io/gradient-ds/zienswijzer-api:latest"
+FE_IMG="ghcr.io/gradient-ds/zienswijzer-frontend:latest"
 # Host port the kind node's :80 is mapped to. Override if 8081 is taken on your
 # machine: `HOST_PORT=9090 ./scripts/kind-acceptance.sh`. (Port 80 is privileged,
 # so we map to an unprivileged host port and curl it with the Host header below.)

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Export the FastAPI schema from the woo-api image to docs/openapi.yaml.
-IMG="${1:-ghcr.io/gradient-ds/woo-api:latest}"
+# Export the FastAPI schema from the zienswijzer-api image to docs/openapi.yaml.
+IMG="${1:-ghcr.io/gradient-ds/zienswijzer-api:latest}"
 NAME="zw-openapi-export"
 
 cleanup() { docker rm -f "$NAME" >/dev/null 2>&1 || true; }
