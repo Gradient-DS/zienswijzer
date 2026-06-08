@@ -1,0 +1,7 @@
+.git/
+.gitignore
+*.tmp
+*.bak
+.DS_Store
+docs/
+audit/

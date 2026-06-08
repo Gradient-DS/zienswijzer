@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Zienswijzer deploy configuration",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["replicaCount", "image", "service", "ingress", "secrets"],
+  "properties": {
+    "replicaCount": {
+      "type": "integer",
+      "title": "Replica count",
+      "minimum": 1,
+      "maximum": 10,
+      "default": 1
+    },
+    "image": {
+      "type": "object",
+      "required": ["api", "frontend"],
+      "properties": {
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["IfNotPresent", "Always", "Never"],
+          "default": "IfNotPresent"
+        },
+        "pullSecrets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "api": {
+          "type": "object",
+          "required": ["repository", "tag"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "tag": { "type": "string", "minLength": 1 }
+          }
+        },
+        "frontend": {
+          "type": "object",
+          "required": ["repository", "tag"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "tag": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "mockMode": { "type": "boolean", "default": false }
+          }
+        },
+        "microsoft": {
+          "type": "object",
+          "properties": {
+            "redirectUri": { "type": "string" },
+            "graphApiEndpoint": { "type": "string" },
+            "scopes": { "type": "string" }
+          }
+        }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "title": "Credentials (stored in Vault)",
+      "required": ["microsoftClientId", "microsoftClientSecret", "microsoftTenantId"],
+      "properties": {
+        "microsoftClientId": {
+          "type": "string",
+          "title": "Microsoft OAuth Client ID",
+          "format": "secret"
+        },
+        "microsoftClientSecret": {
+          "type": "string",
+          "title": "Microsoft OAuth Client Secret",
+          "format": "secret"
+        },
+        "microsoftTenantId": {
+          "type": "string",
+          "title": "Microsoft Azure AD Tenant ID",
+          "format": "secret"
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "required": ["api", "frontend"],
+      "properties": {
+        "api": {
+          "type": "object",
+          "required": ["port"],
+          "properties": {
+            "port": { "type": "integer", "default": 8000, "minimum": 1, "maximum": 65535 }
+          }
+        },
+        "frontend": {
+          "type": "object",
+          "required": ["port"],
+          "properties": {
+            "port": { "type": "integer", "default": 3000, "minimum": 1, "maximum": 65535 }
+          }
+        }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "className": { "type": "string", "default": "nginx" },
+        "host": { "type": "string" },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "secretName": { "type": "string" }
+          }
+        }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "size": { "type": "string", "default": "1Gi" },
+        "storageClassName": { "type": "string" }
+      }
+    },
+    "resources": {
+      "type": "object"
+    },
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" }
+  }
+}

@@ -1,0 +1,3104 @@
+openapi: 3.1.0
+info:
+  title: WOO Backend
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      summary: Health Check
+      description: Health check endpoint
+      operationId: health_check_health_get
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /transform:
+    post:
+      summary: Transform
+      description: Transform text by randomly changing words
+      operationId: transform_transform_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TextInput'
+        required: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TextOutput'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /auth/login:
+    post:
+      summary: Login
+      description: Login - finds user by username or email
+      operationId: login_auth_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /auth/logout:
+    post:
+      summary: Logout
+      description: Dummy logout - always succeeds
+      operationId: logout_auth_logout_post
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+  /auth/me:
+    get:
+      summary: Get Current User
+      description: Get current user - returns the first user for now
+      operationId: get_current_user_auth_me_get
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMeResponse'
+  /workspaces:
+    get:
+      summary: Get Workspaces
+      description: Get all workspaces
+      operationId: get_workspaces_workspaces_get
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceListResponse'
+    post:
+      summary: Create Workspace
+      description: Create a new workspace
+      operationId: create_workspace_workspaces_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkspaceRequest'
+        required: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWorkspaceResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /workspaces/{workspace_id}:
+    get:
+      summary: Get Workspace Detail
+      description: Get detailed workspace information
+      operationId: get_workspace_detail_workspaces__workspace_id__get
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Workspace Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceDetailResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cases:
+    get:
+      summary: Get Cases
+      description: Get all cases
+      operationId: get_cases_cases_get
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseListResponse'
+    post:
+      summary: Create Case
+      description: Create a new case
+      operationId: create_case_cases_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCaseRequest'
+        required: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCaseResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cases/{case_id}:
+    get:
+      summary: Get Case Detail
+      description: Get detailed case information
+      operationId: get_case_detail_cases__case_id__get
+      parameters:
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Case Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseDetailResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cases/{case_id}/stakeholders:
+    get:
+      summary: Get Case Stakeholders
+      description: Get all unique stakeholders for a case
+      operationId: get_case_stakeholders_cases__case_id__stakeholders_get
+      parameters:
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Case Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StakeholderListResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cases/{case_id}/overview:
+    get:
+      summary: Get Case Overview
+      description: |-
+        Get comprehensive overview of case including document status, objected chunks, and stakeholder responses.
+
+        This endpoint provides:
+        - Status of each document (ok vs has objections)
+        - List of objected chunks with stakeholder information
+        - Response status of each stakeholder
+        - Overall case completion status
+      operationId: get_case_overview_cases__case_id__overview_get
+      parameters:
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Case Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseOverviewResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /documents:
+    get:
+      summary: Get Documents
+      description: Get all documents
+      operationId: get_documents_documents_get
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /documents/{document_id}:
+    get:
+      summary: Get Document Detail
+      description: Get detailed document information with chunks and stakeholder mentions, optionally filtered by case for verification status
+      operationId: get_document_detail_documents__document_id__get
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Document Id
+        - name: case_id
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: Case Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentDetail'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /documents/{document_id}/pdf:
+    get:
+      summary: Get Document Pdf
+      description: Serve the PDF file for a document
+      operationId: get_document_pdf_documents__document_id__pdf_get
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Document Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /documents/{document_id}/chunks:
+    get:
+      summary: Get Document Chunks
+      description: Get all chunks for a document with stakeholder mentions, optionally filtered by case for verification status
+      operationId: get_document_chunks_documents__document_id__chunks_get
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Document Id
+        - name: case_id
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: Case Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChunkListResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /documents/upload:
+    post:
+      summary: Upload Document
+      description: Upload a PDF document to a case
+      operationId: upload_document_documents_upload_post
+      parameters:
+        - name: case_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: Case Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_document_documents_upload_post'
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadDocumentResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /stakeholders:
+    get:
+      summary: Get Stakeholders
+      description: Get all stakeholders
+      operationId: get_stakeholders_stakeholders_get
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StakeholderListResponse'
+    post:
+      summary: Create Stakeholder
+      description: Create a new stakeholder
+      operationId: create_stakeholder_stakeholders_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStakeholderRequest'
+        required: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateStakeholderResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /stakeholders/{stakeholder_id}:
+    get:
+      summary: Get Stakeholder
+      description: Get a stakeholder by ID
+      operationId: get_stakeholder_stakeholders__stakeholder_id__get
+      parameters:
+        - name: stakeholder_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Stakeholder Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleStakeholderResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /stakeholders/{stakeholder_id}/publication-status:
+    patch:
+      summary: Update Stakeholder Publication Status
+      description: Update a stakeholder's publication status
+      operationId: update_stakeholder_publication_status_stakeholders__stakeholder_id__publication_status_patch
+      parameters:
+        - name: stakeholder_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Stakeholder Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStakeholderPublicationStatusRequest'
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleStakeholderResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/authorize:
+    get:
+      tags:
+        - email
+      summary: Get Authorization Url
+      description: |-
+        Generate Microsoft OAuth authorization URL.
+
+        Args:
+            user_id: User identifier to associate with the OAuth flow
+
+        Returns:
+            Authorization URL and state parameter
+      operationId: get_authorization_url_email_authorize_get
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: User Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthUrlResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/callback:
+    get:
+      tags:
+        - email
+      summary: Oauth Callback
+      description: |-
+        Handle OAuth callback from Microsoft.
+
+        Args:
+            code: Authorization code from Microsoft
+            state: State parameter (user_id)
+            error: Error message if authorization failed
+
+        Returns:
+            Success status and user information
+      operationId: oauth_callback_email_callback_get
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: Code
+        - name: state
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: State
+        - name: error
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: Error
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/status:
+    get:
+      tags:
+        - email
+      summary: Get Token Status
+      description: |-
+        Check if user has valid email access token.
+
+        Args:
+            user_id: User identifier
+
+        Returns:
+            Token status and user email if available
+      operationId: get_token_status_email_status_get
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: User Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenStatusResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/send:
+    post:
+      tags:
+        - email
+      summary: Send Email
+      description: |-
+        Send an email via Microsoft Outlook.
+
+        Args:
+            user_id: User identifier
+            email_request: Email content and recipients
+            case_id: Optional case ID to associate with this email
+            stakeholder_id: Optional stakeholder ID to associate with this email
+
+        Returns:
+            Success status and message ID
+      operationId: send_email_email_send_post
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: User Id
+        - name: case_id
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: Case Id
+        - name: stakeholder_id
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: Stakeholder Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendEmailRequest'
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendEmailResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/send/woo:
+    post:
+      tags:
+        - email
+      summary: Send Woo Email
+      description: |-
+        Send a WOO (verzoek om inzage) email via Microsoft Outlook with template.
+
+        The email body is automatically generated from the provided template fields
+        (recipientName, requestDescription, chunks, senderName).
+
+        Args:
+            user_id: User identifier
+            email_request: WOO email request with template data
+            case_id: Optional case ID to associate with this email
+
+        Returns:
+            Success status and message ID
+      operationId: send_woo_email_email_send_woo_post
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: User Id
+        - name: case_id
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: Case Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendWOOEmailRequest'
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendEmailResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/send/stakeholder:
+    post:
+      tags:
+        - email
+      summary: Send Stakeholder Email
+      description: |-
+        Send an email to a stakeholder based on their mentions in case documents.
+
+        Args:
+            request: Stakeholder email request with content type and recipients
+
+        Returns:
+            Success status and message ID
+      operationId: send_stakeholder_email_email_send_stakeholder_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendStakeholderEmailRequest'
+        required: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendEmailResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/messages:
+    get:
+      tags:
+        - email
+      summary: Get Emails
+      description: |-
+        Read emails from user's mailbox.
+
+        Args:
+            user_id: User identifier
+            folder: Mail folder (inbox, sentitems, drafts, etc.)
+            top: Number of emails to return (max 100)
+            skip: Number of emails to skip
+            filter_query: OData filter query (e.g., "isRead eq false")
+
+        Returns:
+            List of email messages
+      operationId: get_emails_email_messages_get
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: User Id
+        - name: folder
+          in: query
+          required: false
+          schema:
+            type: string
+            default: inbox
+            title: Folder
+        - name: top
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            title: Top
+        - name: skip
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            title: Skip
+        - name: filter_query
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: Filter Query
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailListResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/messages/{message_id}:
+    get:
+      tags:
+        - email
+      summary: Get Email Detail
+      description: |-
+        Get detailed information about a specific email.
+
+        Args:
+            user_id: User identifier
+            message_id: Email message ID
+
+        Returns:
+            Detailed email information including full body
+      operationId: get_email_detail_email_messages__message_id__get
+      parameters:
+        - name: message_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Message Id
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: User Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/messages/{message_id}/read:
+    post:
+      tags:
+        - email
+      summary: Mark Email As Read
+      description: |-
+        Mark an email as read or unread.
+
+        Args:
+            user_id: User identifier
+            message_id: Email message ID
+            is_read: True to mark as read, False to mark as unread
+
+        Returns:
+            Success status
+      operationId: mark_email_as_read_email_messages__message_id__read_post
+      parameters:
+        - name: message_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Message Id
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: User Id
+        - name: is_read
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+            title: Is Read
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/revoke:
+    delete:
+      tags:
+        - email
+      summary: Revoke Access
+      description: |-
+        Revoke email access for a user (remove stored tokens).
+
+        Args:
+            user_id: User identifier
+
+        Returns:
+            Success status
+      operationId: revoke_access_email_revoke_delete
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: User Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/sent:
+    get:
+      tags:
+        - email
+      summary: Get Sent Emails List
+      description: |-
+        Get list of sent emails, optionally filtered by user_id or case_id.
+
+        Args:
+            user_id: Optional user identifier to filter by
+            case_id: Optional case identifier to filter by
+
+        Returns:
+            List of sent emails
+      operationId: get_sent_emails_list_email_sent_get
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: User Id
+        - name: case_id
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: Case Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentEmailListResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/sent/{email_id}:
+    get:
+      tags:
+        - email
+      summary: Get Sent Email Detail
+      description: |-
+        Get detailed information about a sent email including all replies.
+
+        Args:
+            email_id: Sent email identifier
+
+        Returns:
+            Detailed sent email information with replies
+      operationId: get_sent_email_detail_email_sent__email_id__get
+      parameters:
+        - name: email_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Email Id
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentEmailDetail'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/sent/{email_id}/sync-replies:
+    post:
+      tags:
+        - email
+      summary: Sync Email Replies
+      description: |-
+        Sync replies from Outlook for a specific sent email.
+
+        This endpoint fetches new replies from Outlook based on the conversation ID,
+        saves them to the database, performs sentiment analysis, and updates stakeholder
+        publication status based on the analysis result.
+
+        Args:
+            email_id: Sent email identifier
+            threshold: Confidence threshold for sentiment classification (default: 0.5)
+                       - If confidence >= threshold: classification is accepted
+                       - If confidence < threshold: treated as uncertain/disagree
+
+        Returns:
+            Sync status with counts of new and updated replies
+      operationId: sync_email_replies_email_sent__email_id__sync_replies_post
+      parameters:
+        - name: email_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Email Id
+        - name: threshold
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 0.5
+            title: Threshold
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncRepliesResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/sent/sync-all-replies:
+    post:
+      tags:
+        - email
+      summary: Sync All Email Replies
+      description: |-
+        Sync replies from Outlook for all sent emails by a user.
+
+        This endpoint fetches new replies from Outlook for all sent emails
+        that have a conversation ID, saves them to the database, performs
+        sentiment analysis, and updates stakeholder publication status.
+
+        Args:
+            user_id: User identifier
+            threshold: Confidence threshold for sentiment classification (default: 0.5)
+
+        Returns:
+            Sync status with total counts of new and updated replies
+      operationId: sync_all_email_replies_email_sent_sync_all_replies_post
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: User Id
+        - name: threshold
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 0.5
+            title: Threshold
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncRepliesResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/inbox/messages:
+    get:
+      tags:
+        - email
+      summary: Get Inbox Messages
+      description: |-
+        Get recent inbox messages for debugging reply detection.
+
+        Args:
+            user_id: User identifier
+            top: Number of messages to return (max 50)
+            filter_replies: If provided, only show messages that start with "Re: [filter_replies]"
+
+        Returns:
+            List of inbox messages
+      operationId: get_inbox_messages_email_inbox_messages_get
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: User Id
+        - name: top
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            title: Top
+        - name: filter_replies
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+              - type: "null"
+            title: Filter Replies
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailListResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /email/sent/{email_id}/add-reply:
+    post:
+      tags:
+        - email
+      summary: Add Manual Reply
+      description: |-
+        Manually add a reply to a sent email.
+
+        This is useful for testing or when you want to add replies that weren't
+        automatically detected by the sync process.
+
+        Args:
+            email_id: Sent email identifier
+            reply_request: Reply details
+
+        Returns:
+            Success status
+      operationId: add_manual_reply_email_sent__email_id__add_reply_post
+      parameters:
+        - name: email_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Email Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddReplyRequest'
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncRepliesResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /classification/classify:
+    post:
+      tags:
+        - classification
+      summary: Classify Text
+      description: |-
+        Classify text to determine sentiment regarding publication.
+
+        This endpoint uses zero-shot classification to determine whether a text
+        expresses agreement or objection to publication. It's particularly useful
+        for analyzing stakeholder responses in WOO (Wet open overheid) requests.
+
+        Args:
+            request: ClassificationRequest with text to classify
+
+        Returns:
+            ClassificationResult with classification label, confidence score,
+            and scores for all candidate labels
+
+        Example:
+            POST /classification/classify
+            {
+                "text": "Bedankt voor jullie bericht. Ik heb graag liever niet dat jullie dit publiceren."
+            }
+
+            Response:
+            {
+                "text": "Bedankt voor jullie bericht...",
+                "classification": "objects to publication",
+                "confidence": 0.89,
+                "all_scores": {
+                    "objects to publication": 0.89,
+                    "agrees to publish": 0.11
+                }
+            }
+      operationId: classify_text_classification_classify_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassificationRequest'
+        required: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassificationResult'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /classification/health:
+    get:
+      tags:
+        - classification
+      summary: Health Check
+      description: |-
+        Check if the classification service is ready.
+
+        Returns:
+            Status information about the classification service
+      operationId: health_check_classification_health_get
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /verification/mention/{mention_id}:
+    post:
+      tags:
+        - verification
+      summary: Verify Mention
+      description: |-
+        Verify or unverify a single chunk stakeholder mention for a specific case.
+
+        Args:
+            mention_id: ChunkStakeholder ID
+            request: Verification request with verified flag and case_id
+
+        Returns:
+            Success status and updated mention info
+      operationId: verify_mention_verification_mention__mention_id__post
+      parameters:
+        - name: mention_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Mention Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyMentionRequest'
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyMentionResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /verification/bulk:
+    post:
+      tags:
+        - verification
+      summary: Bulk Verify Mentions
+      description: |-
+        Bulk verify or unverify mentions for a stakeholder in a case.
+
+        Args:
+            request: Bulk verification request with filter criteria
+
+        Returns:
+            Success status and count of verified mentions
+      operationId: bulk_verify_mentions_verification_bulk_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkVerifyRequest'
+        required: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkVerifyResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /pdf/stakeholders/{stakeholder_id}/generate:
+    post:
+      tags:
+        - pdf
+      summary: Generate Stakeholder Pdf
+      description: |-
+        Generate a PDF for a stakeholder based on their mentions.
+
+        Args:
+            stakeholder_id: Stakeholder identifier
+            request: PDF generation request with case_id and content_type
+
+        Returns:
+            PDF file response
+      operationId: generate_stakeholder_pdf_pdf_stakeholders__stakeholder_id__generate_post
+      parameters:
+        - name: stakeholder_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Stakeholder Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneratePDFRequest'
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    AddReplyRequest:
+      properties:
+        outlookMessageId:
+          type: string
+          title: Outlookmessageid
+        fromAddress:
+          $ref: '#/components/schemas/EmailAddress'
+        subject:
+          type: string
+          title: Subject
+        bodyPreview:
+          type: string
+          title: Bodypreview
+        body:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Body
+        bodyType:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Bodytype
+          default: HTML
+        receivedAt:
+          type: string
+          title: Receivedat
+        isRead:
+          anyOf:
+            - type: boolean
+            - type: "null"
+          title: Isread
+          default: false
+        hasAttachments:
+          anyOf:
+            - type: boolean
+            - type: "null"
+          title: Hasattachments
+          default: false
+        importance:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Importance
+          default: normal
+      type: object
+      required:
+        - outlookMessageId
+        - fromAddress
+        - subject
+        - bodyPreview
+        - receivedAt
+      title: AddReplyRequest
+      description: Request model for manually adding a reply
+    AuthMeResponse:
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+      type: object
+      required:
+        - user
+      title: AuthMeResponse
+    Body_upload_document_documents_upload_post:
+      properties:
+        file:
+          type: string
+          format: binary
+          title: File
+      type: object
+      required:
+        - file
+      title: Body_upload_document_documents_upload_post
+    BoundingBox:
+      properties:
+        x:
+          type: number
+          title: X
+        y:
+          type: number
+          title: Y
+        width:
+          type: number
+          title: Width
+        height:
+          type: number
+          title: Height
+        page:
+          type: integer
+          title: Page
+      type: object
+      required:
+        - x
+        - y
+        - width
+        - height
+        - page
+      title: BoundingBox
+    BulkVerifyRequest:
+      properties:
+        stakeholder_id:
+          type: string
+          title: Stakeholder Id
+        case_id:
+          type: string
+          title: Case Id
+        filter_type:
+          type: string
+          title: Filter Type
+        verified:
+          type: boolean
+          title: Verified
+          default: true
+      type: object
+      required:
+        - stakeholder_id
+        - case_id
+        - filter_type
+      title: BulkVerifyRequest
+      description: Request to bulk verify mentions
+    BulkVerifyResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+        message:
+          type: string
+          title: Message
+        verified_count:
+          type: integer
+          title: Verified Count
+      type: object
+      required:
+        - success
+        - message
+        - verified_count
+      title: BulkVerifyResponse
+      description: Response after bulk verification
+    Case:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        description:
+          type: string
+          title: Description
+        document_ids:
+          items:
+            type: string
+          type: array
+          title: Document Ids
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - document_ids
+        - created_at
+        - updated_at
+      title: Case
+    CaseDetail:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        description:
+          type: string
+          title: Description
+        document_ids:
+          items:
+            type: string
+          type: array
+          title: Document Ids
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        documents:
+          items:
+            $ref: '#/components/schemas/Document'
+          type: array
+          title: Documents
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - document_ids
+        - created_at
+        - updated_at
+        - documents
+      title: CaseDetail
+    CaseDetailResponse:
+      properties:
+        case:
+          $ref: '#/components/schemas/CaseDetail'
+      type: object
+      required:
+        - case
+      title: CaseDetailResponse
+    CaseListResponse:
+      properties:
+        cases:
+          items:
+            $ref: '#/components/schemas/Case'
+          type: array
+          title: Cases
+      type: object
+      required:
+        - cases
+      title: CaseListResponse
+    CaseOverviewResponse:
+      properties:
+        case_id:
+          type: string
+          title: Case Id
+        case_title:
+          type: string
+          title: Case Title
+        documents:
+          items:
+            $ref: '#/components/schemas/DocumentStatus'
+          type: array
+          title: Documents
+        stakeholders:
+          items:
+            $ref: '#/components/schemas/StakeholderResponse'
+          type: array
+          title: Stakeholders
+        total_documents:
+          type: integer
+          title: Total Documents
+        total_objected_chunks:
+          type: integer
+          title: Total Objected Chunks
+        all_stakeholders_responded:
+          type: boolean
+          title: All Stakeholders Responded
+      type: object
+      required:
+        - case_id
+        - case_title
+        - documents
+        - stakeholders
+        - total_documents
+        - total_objected_chunks
+        - all_stakeholders_responded
+      title: CaseOverviewResponse
+      description: Complete overview of case status
+    ChunkDetail:
+      properties:
+        id:
+          type: string
+          title: Id
+        document_id:
+          type: string
+          title: Document Id
+        page:
+          type: integer
+          title: Page
+        context:
+          type: string
+          title: Context
+        bbox:
+          $ref: '#/components/schemas/BoundingBox'
+        stakeholder_mentions:
+          items:
+            $ref: '#/components/schemas/StakeholderMention'
+          type: array
+          title: Stakeholder Mentions
+      type: object
+      required:
+        - id
+        - document_id
+        - page
+        - context
+        - bbox
+        - stakeholder_mentions
+      title: ChunkDetail
+    ChunkListResponse:
+      properties:
+        chunks:
+          items:
+            $ref: '#/components/schemas/ChunkDetail'
+          type: array
+          title: Chunks
+      type: object
+      required:
+        - chunks
+      title: ChunkListResponse
+    ClassificationRequest:
+      properties:
+        text:
+          type: string
+          title: Text
+      type: object
+      required:
+        - text
+      title: ClassificationRequest
+      description: Request model for text classification
+    ClassificationResult:
+      properties:
+        text:
+          type: string
+          title: Text
+        classification:
+          type: string
+          title: Classification
+        confidence:
+          type: number
+          title: Confidence
+        all_scores:
+          additionalProperties:
+            type: number
+          type: object
+          title: All Scores
+      type: object
+      required:
+        - text
+        - classification
+        - confidence
+        - all_scores
+      title: ClassificationResult
+      description: Result model for text classification
+    CreateCaseRequest:
+      properties:
+        title:
+          type: string
+          title: Title
+        description:
+          type: string
+          title: Description
+        password:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Password
+      type: object
+      required:
+        - title
+        - description
+      title: CreateCaseRequest
+    CreateCaseResponse:
+      properties:
+        case:
+          $ref: '#/components/schemas/Case'
+      type: object
+      required:
+        - case
+      title: CreateCaseResponse
+    CreateStakeholderRequest:
+      properties:
+        type:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Type
+        name:
+          type: string
+          title: Name
+        contact_info:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Contact Info
+        publication_status:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Publication Status
+      type: object
+      required:
+        - name
+      title: CreateStakeholderRequest
+    CreateStakeholderResponse:
+      properties:
+        stakeholder:
+          $ref: '#/components/schemas/Stakeholder'
+      type: object
+      required:
+        - stakeholder
+      title: CreateStakeholderResponse
+    CreateWorkspaceRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+        description:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Description
+      type: object
+      required:
+        - name
+      title: CreateWorkspaceRequest
+    CreateWorkspaceResponse:
+      properties:
+        workspace:
+          $ref: '#/components/schemas/Workspace'
+      type: object
+      required:
+        - workspace
+      title: CreateWorkspaceResponse
+    Document:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Description
+        type:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Type
+        keywords:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Keywords
+        author:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Author
+        file_path:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: File Path
+        file_size:
+          anyOf:
+            - type: integer
+            - type: "null"
+          title: File Size
+        page_count:
+          anyOf:
+            - type: integer
+            - type: "null"
+          title: Page Count
+        parse_status:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Parse Status
+      type: object
+      required:
+        - id
+        - title
+      title: Document
+    DocumentDetail:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Description
+        type:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Type
+        file_path:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: File Path
+        file_size:
+          anyOf:
+            - type: integer
+            - type: "null"
+          title: File Size
+        page_count:
+          anyOf:
+            - type: integer
+            - type: "null"
+          title: Page Count
+        parse_status:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Parse Status
+        uploaded_at:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Uploaded At
+        processed_at:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Processed At
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        chunks:
+          items:
+            $ref: '#/components/schemas/ChunkDetail'
+          type: array
+          title: Chunks
+        pdf_url:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Pdf Url
+      type: object
+      required:
+        - id
+        - title
+        - created_at
+        - updated_at
+        - chunks
+      title: DocumentDetail
+    DocumentStatus:
+      properties:
+        document_id:
+          type: string
+          title: Document Id
+        document_title:
+          type: string
+          title: Document Title
+        is_ok:
+          type: boolean
+          title: Is Ok
+        objected_chunks:
+          items:
+            $ref: '#/components/schemas/ObjectedChunk'
+          type: array
+          title: Objected Chunks
+        stakeholder_ids:
+          items:
+            type: string
+          type: array
+          title: Stakeholder Ids
+      type: object
+      required:
+        - document_id
+        - document_title
+        - is_ok
+        - objected_chunks
+        - stakeholder_ids
+      title: DocumentStatus
+      description: Status of a document in the case
+    EmailAddress:
+      properties:
+        address:
+          type: string
+          format: email
+          title: Address
+        name:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Name
+      type: object
+      required:
+        - address
+      title: EmailAddress
+      description: Email address with name
+    EmailAttachment:
+      properties:
+        name:
+          type: string
+          title: Name
+        contentType:
+          type: string
+          title: Contenttype
+        contentBytes:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Contentbytes
+        filePath:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Filepath
+        size:
+          anyOf:
+            - type: integer
+            - type: "null"
+          title: Size
+      type: object
+      required:
+        - name
+        - contentType
+      title: EmailAttachment
+      description: Email attachment model
+    EmailListResponse:
+      properties:
+        emails:
+          items:
+            $ref: '#/components/schemas/EmailMessage'
+          type: array
+          title: Emails
+        nextLink:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Nextlink
+        total:
+          type: integer
+          title: Total
+      type: object
+      required:
+        - emails
+        - total
+      title: EmailListResponse
+      description: Response model for list of emails
+    EmailMessage:
+      properties:
+        id:
+          type: string
+          title: Id
+        subject:
+          type: string
+          title: Subject
+        bodyPreview:
+          type: string
+          title: Bodypreview
+        body:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Body
+        from_address:
+          $ref: '#/components/schemas/EmailAddress'
+        toRecipients:
+          items:
+            $ref: '#/components/schemas/EmailAddress'
+          type: array
+          title: Torecipients
+        ccRecipients:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAddress'
+              type: array
+            - type: "null"
+          title: Ccrecipients
+        receivedDateTime:
+          type: string
+          title: Receiveddatetime
+        isRead:
+          type: boolean
+          title: Isread
+        hasAttachments:
+          type: boolean
+          title: Hasattachments
+        importance:
+          type: string
+          title: Importance
+      type: object
+      required:
+        - id
+        - subject
+        - bodyPreview
+        - from_address
+        - toRecipients
+        - receivedDateTime
+        - isRead
+        - hasAttachments
+        - importance
+      title: EmailMessage
+      description: Email message model for reading emails
+    EmailReply:
+      properties:
+        id:
+          type: string
+          title: Id
+        sentEmailId:
+          type: string
+          title: Sentemailid
+        outlookMessageId:
+          type: string
+          title: Outlookmessageid
+        fromAddress:
+          $ref: '#/components/schemas/EmailAddress'
+        subject:
+          type: string
+          title: Subject
+        bodyPreview:
+          type: string
+          title: Bodypreview
+        body:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Body
+        bodyType:
+          type: string
+          title: Bodytype
+        receivedAt:
+          type: string
+          title: Receivedat
+        isRead:
+          type: boolean
+          title: Isread
+        hasAttachments:
+          type: boolean
+          title: Hasattachments
+        importance:
+          type: string
+          title: Importance
+        createdAt:
+          type: string
+          title: Createdat
+        updatedAt:
+          type: string
+          title: Updatedat
+      type: object
+      required:
+        - id
+        - sentEmailId
+        - outlookMessageId
+        - fromAddress
+        - subject
+        - bodyPreview
+        - bodyType
+        - receivedAt
+        - isRead
+        - hasAttachments
+        - importance
+        - createdAt
+        - updatedAt
+      title: EmailReply
+      description: Model for an email reply
+    GeneratePDFRequest:
+      properties:
+        case_id:
+          type: string
+          title: Case Id
+        content_type:
+          type: string
+          title: Content Type
+      type: object
+      required:
+        - case_id
+        - content_type
+      title: GeneratePDFRequest
+      description: Request to generate a PDF for a stakeholder
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LoginRequest:
+      properties:
+        username:
+          type: string
+          title: Username
+        email:
+          type: string
+          title: Email
+      type: object
+      required:
+        - username
+        - email
+      title: LoginRequest
+    LoginResponse:
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+          title: Token
+      type: object
+      required:
+        - user
+        - token
+      title: LoginResponse
+    LogoutResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+        - success
+        - message
+      title: LogoutResponse
+    OAuthCallbackResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+        message:
+          type: string
+          title: Message
+        userId:
+          type: string
+          title: Userid
+        email:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Email
+      type: object
+      required:
+        - success
+        - message
+        - userId
+      title: OAuthCallbackResponse
+      description: Response model for OAuth callback
+    OAuthUrlResponse:
+      properties:
+        authUrl:
+          type: string
+          title: Authurl
+        state:
+          type: string
+          title: State
+      type: object
+      required:
+        - authUrl
+        - state
+      title: OAuthUrlResponse
+      description: Response model for OAuth authorization URL
+    ObjectedChunk:
+      properties:
+        chunk_id:
+          type: string
+          title: Chunk Id
+        document_id:
+          type: string
+          title: Document Id
+        document_title:
+          type: string
+          title: Document Title
+        page:
+          type: integer
+          title: Page
+        context:
+          type: string
+          title: Context
+        stakeholder_id:
+          type: string
+          title: Stakeholder Id
+        stakeholder_name:
+          type: string
+          title: Stakeholder Name
+      type: object
+      required:
+        - chunk_id
+        - document_id
+        - document_title
+        - page
+        - context
+        - stakeholder_id
+        - stakeholder_name
+      title: ObjectedChunk
+      description: Chunk that was objected to
+    SendEmailRequest:
+      properties:
+        to:
+          items:
+            $ref: '#/components/schemas/EmailAddress'
+          type: array
+          title: To
+        subject:
+          type: string
+          title: Subject
+        body:
+          type: string
+          title: Body
+        cc:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAddress'
+              type: array
+            - type: "null"
+          title: Cc
+        bcc:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAddress'
+              type: array
+            - type: "null"
+          title: Bcc
+        bodyType:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Bodytype
+          default: HTML
+        importance:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Importance
+          default: normal
+        attachments:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAttachment'
+              type: array
+            - type: "null"
+          title: Attachments
+      type: object
+      required:
+        - to
+        - subject
+        - body
+      title: SendEmailRequest
+      description: Request model for sending an email
+    SendEmailResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+        message:
+          type: string
+          title: Message
+        messageId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Messageid
+      type: object
+      required:
+        - success
+        - message
+      title: SendEmailResponse
+      description: Response model after sending an email
+    SendStakeholderEmailRequest:
+      properties:
+        stakeholder_id:
+          type: string
+          title: Stakeholder Id
+        case_id:
+          type: string
+          title: Case Id
+        user_id:
+          type: string
+          title: User Id
+        to:
+          items:
+            $ref: '#/components/schemas/EmailAddress'
+          type: array
+          title: To
+        subject:
+          type: string
+          title: Subject
+        content_type:
+          type: string
+          title: Content Type
+        custom_message:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Custom Message
+        cc:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAddress'
+              type: array
+            - type: "null"
+          title: Cc
+        bcc:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAddress'
+              type: array
+            - type: "null"
+          title: Bcc
+      type: object
+      required:
+        - stakeholder_id
+        - case_id
+        - user_id
+        - to
+        - subject
+        - content_type
+      title: SendStakeholderEmailRequest
+      description: Request model for sending an email to a stakeholder based on their mentions
+    SendWOOEmailRequest:
+      properties:
+        to:
+          items:
+            $ref: '#/components/schemas/EmailAddress'
+          type: array
+          title: To
+        subject:
+          type: string
+          title: Subject
+        requestDescription:
+          type: string
+          title: Requestdescription
+        recipientName:
+          type: string
+          title: Recipientname
+        senderName:
+          type: string
+          title: Sendername
+        chunks:
+          items:
+            $ref: '#/components/schemas/TextChunk'
+          type: array
+          title: Chunks
+        cc:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAddress'
+              type: array
+            - type: "null"
+          title: Cc
+        bcc:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAddress'
+              type: array
+            - type: "null"
+          title: Bcc
+        bodyType:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Bodytype
+          default: HTML
+        importance:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Importance
+          default: normal
+        attachments:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAttachment'
+              type: array
+            - type: "null"
+          title: Attachments
+      type: object
+      required:
+        - to
+        - subject
+        - requestDescription
+        - recipientName
+        - senderName
+        - chunks
+      title: SendWOOEmailRequest
+      description: Request model for sending a WOO (verzoek om inzage) email with template
+    SentEmail:
+      properties:
+        id:
+          type: string
+          title: Id
+        userId:
+          type: string
+          title: Userid
+        subject:
+          type: string
+          title: Subject
+        body:
+          type: string
+          title: Body
+        bodyType:
+          type: string
+          title: Bodytype
+        toRecipients:
+          items:
+            $ref: '#/components/schemas/EmailAddress'
+          type: array
+          title: Torecipients
+        ccRecipients:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAddress'
+              type: array
+            - type: "null"
+          title: Ccrecipients
+        bccRecipients:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAddress'
+              type: array
+            - type: "null"
+          title: Bccrecipients
+        importance:
+          type: string
+          title: Importance
+        outlookMessageId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Outlookmessageid
+        outlookConversationId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Outlookconversationid
+        trackingId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Trackingid
+        sentAt:
+          type: string
+          title: Sentat
+        caseId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Caseid
+        stakeholderId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Stakeholderid
+        replyCount:
+          anyOf:
+            - type: integer
+            - type: "null"
+          title: Replycount
+        createdAt:
+          type: string
+          title: Createdat
+      type: object
+      required:
+        - id
+        - userId
+        - subject
+        - body
+        - bodyType
+        - toRecipients
+        - importance
+        - sentAt
+        - createdAt
+      title: SentEmail
+      description: Model for a sent email
+    SentEmailDetail:
+      properties:
+        id:
+          type: string
+          title: Id
+        userId:
+          type: string
+          title: Userid
+        subject:
+          type: string
+          title: Subject
+        body:
+          type: string
+          title: Body
+        bodyType:
+          type: string
+          title: Bodytype
+        toRecipients:
+          items:
+            $ref: '#/components/schemas/EmailAddress'
+          type: array
+          title: Torecipients
+        ccRecipients:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAddress'
+              type: array
+            - type: "null"
+          title: Ccrecipients
+        bccRecipients:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/EmailAddress'
+              type: array
+            - type: "null"
+          title: Bccrecipients
+        stakeholderId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Stakeholderid
+        importance:
+          type: string
+          title: Importance
+        outlookMessageId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Outlookmessageid
+        outlookConversationId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Outlookconversationid
+        trackingId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Trackingid
+        sentAt:
+          type: string
+          title: Sentat
+        caseId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Caseid
+        createdAt:
+          type: string
+          title: Createdat
+        replies:
+          items:
+            $ref: '#/components/schemas/EmailReply'
+          type: array
+          title: Replies
+      type: object
+      required:
+        - id
+        - userId
+        - subject
+        - body
+        - bodyType
+        - toRecipients
+        - importance
+        - sentAt
+        - createdAt
+        - replies
+      title: SentEmailDetail
+      description: Model for a sent email with its replies
+    SentEmailListResponse:
+      properties:
+        emails:
+          items:
+            $ref: '#/components/schemas/SentEmail'
+          type: array
+          title: Emails
+        total:
+          type: integer
+          title: Total
+      type: object
+      required:
+        - emails
+        - total
+      title: SentEmailListResponse
+      description: Response model for list of sent emails
+    SentimentAnalysisResult:
+      properties:
+        reply_text:
+          type: string
+          title: Reply Text
+        classification:
+          type: string
+          title: Classification
+        confidence:
+          type: number
+          title: Confidence
+        all_scores:
+          additionalProperties:
+            type: number
+          type: object
+          title: All Scores
+        publication_status:
+          type: string
+          title: Publication Status
+      type: object
+      required:
+        - reply_text
+        - classification
+        - confidence
+        - all_scores
+        - publication_status
+      title: SentimentAnalysisResult
+      description: Result of sentiment analysis on a reply
+    SingleStakeholderResponse:
+      properties:
+        stakeholder:
+          $ref: '#/components/schemas/Stakeholder'
+      type: object
+      required:
+        - stakeholder
+      title: SingleStakeholderResponse
+    Stakeholder:
+      properties:
+        id:
+          type: string
+          title: Id
+        type:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Type
+        name:
+          type: string
+          title: Name
+        contact_info:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Contact Info
+        publication_status:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Publication Status
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+        - id
+        - name
+        - created_at
+        - updated_at
+      title: Stakeholder
+    StakeholderListResponse:
+      properties:
+        stakeholders:
+          items:
+            $ref: '#/components/schemas/Stakeholder'
+          type: array
+          title: Stakeholders
+      type: object
+      required:
+        - stakeholders
+      title: StakeholderListResponse
+    StakeholderMention:
+      properties:
+        id:
+          type: string
+          title: Id
+        chunk_id:
+          type: string
+          title: Chunk Id
+        stakeholder_id:
+          type: string
+          title: Stakeholder Id
+        stakeholder:
+          $ref: '#/components/schemas/Stakeholder'
+        confidence:
+          type: number
+          title: Confidence
+        mention_text:
+          type: string
+          title: Mention Text
+        mention_bbox:
+          $ref: '#/components/schemas/BoundingBox'
+        verified:
+          anyOf:
+            - type: boolean
+            - type: "null"
+          title: Verified
+        created_at:
+          type: string
+          title: Created At
+      type: object
+      required:
+        - id
+        - chunk_id
+        - stakeholder_id
+        - stakeholder
+        - confidence
+        - mention_text
+        - mention_bbox
+        - created_at
+      title: StakeholderMention
+    StakeholderResponse:
+      properties:
+        stakeholder_id:
+          type: string
+          title: Stakeholder Id
+        stakeholder_name:
+          type: string
+          title: Stakeholder Name
+        publication_status:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Publication Status
+        has_replied:
+          type: boolean
+          title: Has Replied
+      type: object
+      required:
+        - stakeholder_id
+        - stakeholder_name
+        - publication_status
+        - has_replied
+      title: StakeholderResponse
+      description: Stakeholder response information
+    SyncRepliesResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+        message:
+          type: string
+          title: Message
+        new_replies:
+          type: integer
+          title: New Replies
+        updated_replies:
+          type: integer
+          title: Updated Replies
+        sentiment_analysis:
+          anyOf:
+            - items:
+                $ref: '#/components/schemas/SentimentAnalysisResult'
+              type: array
+            - type: "null"
+          title: Sentiment Analysis
+      type: object
+      required:
+        - success
+        - message
+        - new_replies
+        - updated_replies
+      title: SyncRepliesResponse
+      description: Response model for syncing replies
+    TextChunk:
+      properties:
+        id:
+          type: string
+          title: Id
+        text:
+          type: string
+          title: Text
+        pageNumber:
+          anyOf:
+            - type: integer
+            - type: "null"
+          title: Pagenumber
+        documentId:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Documentid
+      type: object
+      required:
+        - id
+        - text
+      title: TextChunk
+      description: Text chunk from a document
+    TextInput:
+      properties:
+        text:
+          type: string
+          title: Text
+      type: object
+      required:
+        - text
+      title: TextInput
+    TextOutput:
+      properties:
+        original:
+          type: string
+          title: Original
+        transformed:
+          type: string
+          title: Transformed
+      type: object
+      required:
+        - original
+        - transformed
+      title: TextOutput
+    TokenStatusResponse:
+      properties:
+        hasToken:
+          type: boolean
+          title: Hastoken
+        email:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Email
+        expiresAt:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Expiresat
+      type: object
+      required:
+        - hasToken
+      title: TokenStatusResponse
+      description: Response model for token status
+    UpdateStakeholderPublicationStatusRequest:
+      properties:
+        publication_status:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Publication Status
+      type: object
+      title: UpdateStakeholderPublicationStatusRequest
+    UploadDocumentResponse:
+      properties:
+        document:
+          $ref: '#/components/schemas/Document'
+      type: object
+      required:
+        - document
+      title: UploadDocumentResponse
+    User:
+      properties:
+        id:
+          type: string
+          title: Id
+        username:
+          type: string
+          title: Username
+        email:
+          type: string
+          title: Email
+        avatar:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Avatar
+      type: object
+      required:
+        - id
+        - username
+        - email
+      title: User
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+        - loc
+        - msg
+        - type
+      title: ValidationError
+    VerifyMentionRequest:
+      properties:
+        verified:
+          type: boolean
+          title: Verified
+          default: true
+        case_id:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Case Id
+      type: object
+      title: VerifyMentionRequest
+      description: Request to verify a single mention
+    VerifyMentionResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+        message:
+          type: string
+          title: Message
+        mention_id:
+          type: string
+          title: Mention Id
+        verified:
+          type: boolean
+          title: Verified
+      type: object
+      required:
+        - success
+        - message
+        - mention_id
+        - verified
+      title: VerifyMentionResponse
+      description: Response after verifying a mention
+    Workspace:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        description:
+          type: string
+          title: Description
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        member_count:
+          type: integer
+          title: Member Count
+        is_owner:
+          type: boolean
+          title: Is Owner
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - created_at
+        - updated_at
+        - member_count
+        - is_owner
+      title: Workspace
+    WorkspaceDetail:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        description:
+          type: string
+          title: Description
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        member_count:
+          type: integer
+          title: Member Count
+        is_owner:
+          type: boolean
+          title: Is Owner
+        members:
+          items:
+            $ref: '#/components/schemas/User'
+          type: array
+          title: Members
+        documents:
+          items:
+            $ref: '#/components/schemas/Document'
+          type: array
+          title: Documents
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - created_at
+        - updated_at
+        - member_count
+        - is_owner
+        - members
+        - documents
+      title: WorkspaceDetail
+    WorkspaceDetailResponse:
+      properties:
+        workspace:
+          $ref: '#/components/schemas/WorkspaceDetail'
+      type: object
+      required:
+        - workspace
+      title: WorkspaceDetailResponse
+    WorkspaceListResponse:
+      properties:
+        workspaces:
+          items:
+            $ref: '#/components/schemas/Workspace'
+          type: array
+          title: Workspaces
+      type: object
+      required:
+        - workspaces
+      title: WorkspaceListResponse
