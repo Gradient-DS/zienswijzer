@@ -1,47 +1,56 @@
 # Backend Dockerfile for WOO API
-# Multi-stage build for smaller final image
+# Multi-stage uv build for a smaller, reproducible final image.
 
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
+# Pinned uv binary (copied from the official image — no curl|sh bootstrap).
+COPY --from=ghcr.io/astral-sh/uv:0.9.3 /uv /uvx /usr/local/bin/
+
+# Build deps needed to compile any sdists in the dependency tree.
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     build-essential \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /build
+WORKDIR /app
 
-# Copy requirements first for better layer caching
-COPY requirements.txt .
+# uv settings: copy wheels into the venv (layer-friendly), compile bytecode,
+# and never reach back to a managed Python — use the image's interpreter.
+ENV UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_PYTHON_DOWNLOADS=never
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --user -r requirements.txt
+# Install dependencies first (cached unless the lock changes), without the
+# project itself, and without dev tools.
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev
 
-# Final stage
+# Now add the application code and install the project into the same venv.
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
+# ---- Final stage ----
 FROM python:3.11-slim
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
+# Patch OS packages (closes Trivy HIGH/CRITICAL base-image findings) + curl for
+# the health check.
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for security
+# Non-root user for security.
 RUN useradd -m -u 1000 appuser
 
-# Set working directory
 WORKDIR /app
 
-# Copy Python packages from builder
-COPY --from=builder /root/.local /home/appuser/.local
+# Copy the resolved virtualenv and the application code from the builder.
+COPY --from=builder --chown=appuser:appuser /app /app
 
-# Copy application code
-COPY --chown=appuser:appuser . .
+# Put the venv on PATH so `python`/`uvicorn` resolve to it.
+ENV PATH=/app/.venv/bin:$PATH
 
-# Ensure the user's local bin is in PATH
-ENV PATH=/home/appuser/.local/bin:$PATH
-
-# Switch to non-root user
 USER appuser
 
 # Expose port (must match docker-compose)
@@ -53,4 +62,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Run the application
 CMD ["python", "-m", "server"]
-

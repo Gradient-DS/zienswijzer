@@ -26,7 +26,8 @@ WOO/
 │   │   └── utils/
 │   │       ├── __init__.py
 │   │       └── text_processor.py
-│   └── requirements.txt
+│   ├── pyproject.toml          (dependencies — source of truth)
+│   └── uv.lock                 (pinned, reproducible dependency set)
 ├── frontend/
 │   ├── src/
 │   │   ├── api/                 (API hooks with TanStack Query)
@@ -141,43 +142,33 @@ python --version
    cd backend
    ```
 
-2. **Create a virtual environment:**
+2. **Install dependencies with [uv](https://docs.astral.sh/uv/):**
 
-   **macOS/Linux:**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-   **Windows:**
-   ```cmd
-   python -m venv venv
-   venv\Scripts\activate
-   ```
-
-3. **Install dependencies:**
+   Dependencies are defined in `pyproject.toml` and pinned in `uv.lock`. A
+   single command creates the virtual environment and installs the exact locked
+   versions (uv installs Python 3.11 automatically if you don't have it):
 
    **macOS/Linux/Windows:**
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
 
-4. **Run the backend server:**
+   > Don't have uv? Install it from https://docs.astral.sh/uv/getting-started/installation/
 
-   **macOS/Linux:**
+3. **Run the backend server:**
+
+   Prefix commands with `uv run` to use the project environment (no manual
+   `activate` needed):
+
+   **macOS/Linux/Windows:**
    ```bash
-   python -m server.app
-   ```
-
-   **Windows:**
-   ```cmd
-   python -m server.app
+   uv run python -m server.app
    ```
 
    Or using uvicorn directly:
    ```bash
    # macOS/Linux/Windows
-   uvicorn server.app:app --reload
+   uv run uvicorn server.app:app --reload
    ```
 
 The backend will start at `http://localhost:8000`
@@ -393,24 +384,12 @@ taskkill /PID <PID> /F
 
 ### Python Virtual Environment Issues
 
-**macOS/Linux:**
-```bash
-# Deactivate and recreate
-deactivate
-rm -rf venv
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+Recreate the environment from the lockfile (works the same on macOS/Linux/Windows):
 
-**Windows:**
-```cmd
-# Deactivate and recreate
-deactivate
-rmdir /s venv
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
+```bash
+# Remove the environment and rebuild it from uv.lock
+rm -rf .venv        # Windows: rmdir /s .venv
+uv sync
 ```
 
 ### Node Modules Issues
