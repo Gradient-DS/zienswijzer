@@ -3,9 +3,9 @@ name: zienswijzer
 description: Zienswijzer — WOO (Wet Open Overheid) case & document management for Dutch public bodies.
 type: application
 # Chart version — bump on chart changes (semver).
-version: 0.1.1
+version: 0.1.2
 # appVersion MUST match the released image tag set in values.yaml (image.*.tag).
-appVersion: "0.1.1"
+appVersion: "0.1.2"
 home: https://github.com/gradient-ds/zienswijzer
 sources:
   - https://github.com/gradient-ds/zienswijzer
