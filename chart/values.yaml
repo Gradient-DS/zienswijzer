@@ -6,17 +6,16 @@
 replicaCount: 1
 
 image:
-  # TODO(open-item-5): replace "latest" with a concrete immutable released tag/digest
-  # before submission. TODO(open-item-4): confirm these images are PUBLIC on ghcr;
-  # if private, the platform/kind need an imagePullSecret.
+  # Pinned to the immutable released tag v0.1.0 (published to GHCR by the
+  # images.yaml workflow on the v0.1.0 git tag). Images are PUBLIC on ghcr.
   pullPolicy: IfNotPresent
   pullSecrets: []
   api:
     repository: ghcr.io/gradient-ds/zienswijzer-api
-    tag: latest
+    tag: v0.1.0
   frontend:
     repository: ghcr.io/gradient-ds/zienswijzer-frontend
-    tag: latest
+    tag: v0.1.0
 
 # Non-secret backend configuration (rendered into the api ConfigMap / env).
 config:
