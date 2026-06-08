@@ -438,6 +438,17 @@ npm install
 - Document annotation
 - Advanced PDF features
 
+## Contributing
+
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md)
+and [Code of Conduct](CODE_OF_CONDUCT.md) before getting started. To report a
+security vulnerability, follow our [Security Policy](SECURITY.md).
+
+## License
+
+This project is licensed under the **European Union Public Licence v1.2
+(EUPL-1.2)**. See the [LICENSE](LICENSE) file for the full text.
+
 ---
 
 Built for WOO (Wet Open Overheid) Project 🚀
