@@ -4,24 +4,28 @@ version = "0.1.0"
 description = "WOO Backend Server"
 requires-python = ">=3.11"
 
-# Direct runtime dependencies only. Pinned to the versions currently deployed
-# (the former requirements.txt) so this migration is behaviour-preserving; the
-# full transitive set is captured in uv.lock. CVE bumps are a separate step.
+# Direct runtime dependencies. The ML stack (torch/spacy/transformers/pymupdf)
+# stays exact-pinned for reproducibility; security-sensitive packages use a
+# lower bound so uv resolves the latest patched release (exact versions are
+# captured in uv.lock). Bounds below were raised to clear Trivy HIGH/CRITICAL
+# CVEs (starlette/fastapi, python-multipart, langchain-core, msal+cryptography).
 dependencies = [
-    "fastapi==0.104.1",
+    "fastapi>=0.118.0",
     "uvicorn[standard]==0.24.0",
     "pydantic[email]==2.12.3",
     "pydantic-settings==2.0.3",
     "python-dotenv==1.0.0",
-    "python-multipart==0.0.20",
-    "langchain-core==0.3.79",
-    "langchain-pymupdf4llm==0.4.1",
-    "PyMuPDF==1.26.5",
+    "python-multipart>=0.0.27",
+    "starlette>=0.49.1",
+    "cryptography>=46.0.5",
+    "langchain-core>=1.2.22",
+    "langchain-pymupdf4llm>=0.5.0",
+    "PyMuPDF>=1.26.6",
     "spacy==3.8.7",
     "transformers==4.48.0",
     "torch==2.9.0",
     "sentencepiece==0.2.1",
-    "msal==1.24.0",
+    "msal>=1.32.0",
     "requests==2.31.0",
 ]
 

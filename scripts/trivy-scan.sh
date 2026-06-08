@@ -4,10 +4,10 @@ API_IMG="${1:-ghcr.io/gradient-ds/woo-api:latest}"
 FE_IMG="${2:-ghcr.io/gradient-ds/woo-frontend:latest}"
 OUT="audit/security-scan.sarif"
 
-echo "==> Trivy scan (SARIF, severity CRITICAL only — shrunk to stay <=100 KB) of both images"
+echo "==> Trivy scan (SARIF, severity HIGH,CRITICAL) of both images"
 echo "    Gate check below covers HIGH+CRITICAL separately."
-trivy image --quiet --format sarif --severity CRITICAL --output /tmp/api.sarif "$API_IMG"
-trivy image --quiet --format sarif --severity CRITICAL --output /tmp/fe.sarif  "$FE_IMG"
+trivy image --quiet --format sarif --severity HIGH,CRITICAL --output /tmp/api.sarif "$API_IMG"
+trivy image --quiet --format sarif --severity HIGH,CRITICAL --output /tmp/fe.sarif  "$FE_IMG"
 
 python3 - "$OUT" /tmp/api.sarif /tmp/fe.sarif <<'PY'
 import json, sys
