@@ -6,17 +6,17 @@
 replicaCount: 1
 
 image:
-  # Pinned to the immutable released image tag 0.1.0 (published to GHCR by the
-  # images.yaml workflow on the `v0.1.0` git tag — the semver tag normalises to
-  # `0.1.0`, no `v` prefix). Images are PUBLIC on ghcr.
+  # Pinned to the immutable released image tag 0.1.1 (published to GHCR by the
+  # images.yaml workflow on the `v0.1.1` git tag — the semver tag normalises to
+  # `0.1.1`, no `v` prefix). Images are PUBLIC on ghcr.
   pullPolicy: IfNotPresent
   pullSecrets: []
   api:
     repository: ghcr.io/gradient-ds/zienswijzer-api
-    tag: 0.1.0
+    tag: 0.1.1
   frontend:
     repository: ghcr.io/gradient-ds/zienswijzer-frontend
-    tag: 0.1.0
+    tag: 0.1.1
 
 # Non-secret backend configuration (rendered into the api ConfigMap / env).
 config:
