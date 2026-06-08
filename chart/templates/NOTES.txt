@@ -1,0 +1,18 @@
+Zienswijzer has been deployed.
+
+{{- if .Values.ingress.enabled }}
+
+Access the app through the Ingress:
+  Frontend:  http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}/
+  API:       http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}/api/health
+
+The Ingress rewrites /api/(.*) -> api service "/$1" (the backend serves routes at root on :8000).
+{{- else }}
+
+Ingress is disabled. Reach the services in-cluster:
+  API:       {{ include "zienswijzer.fullname" . }}-api:{{ .Values.service.api.port }}/health
+  Frontend:  {{ include "zienswijzer.fullname" . }}-frontend:{{ .Values.service.frontend.port }}/
+{{- end }}
+
+Pods:
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
