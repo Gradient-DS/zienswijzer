@@ -24,7 +24,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  TRIVY_VERSION: v0.68.2
+  TRIVY_VERSION: v0.69.3
 
 jobs:
   build-scan-publish:
@@ -67,9 +67,15 @@ jobs:
 
       - name: Install Trivy ${{ env.TRIVY_VERSION }}
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin "${TRIVY_VERSION}"
-          trivy --version
+          set -euxo pipefail
+          ver="${TRIVY_VERSION#v}"
+          mkdir -p "$HOME/bin"
+          curl -fsSL \
+            "https://github.com/aquasecurity/trivy/releases/download/v${ver}/trivy_${ver}_Linux-64bit.tar.gz" \
+            -o /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C "$HOME/bin" trivy
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          "$HOME/bin/trivy" --version
 
       # Gate: any HIGH/CRITICAL (CVSS >= 7.0) finding fails the job.
       - name: Trivy gate (HIGH,CRITICAL → fail)

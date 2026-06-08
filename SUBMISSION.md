@@ -6,12 +6,16 @@ browser-only steps and the manual items that must be done before submitting.
 
 ## 0. Pre-submission checklist (DO THESE FIRST)
 
-- [ ] **BLOCKING — security gate.** The Trivy scan found **114 HIGH/CRITICAL
-      (CVSS ≥ 7.0)** vulnerabilities (83 in `woo-api`, 31 in `woo-frontend`). The
-      platform auto-rejects any CVSS ≥ 7.0 finding, so the submission **cannot pass**
-      until both images are rebuilt with patched base images/dependencies and
-      re-scanned to **zero** HIGH/CRITICAL (`./scripts/trivy-scan.sh`). The committed
-      `audit/security-scan.sarif` is filtered to CRITICAL-only to fit the 100 KB limit.
+- [x] **RESOLVED — security gate.** Both images are now at **zero HIGH/CRITICAL**
+      (CVSS ≥ 7.0) Trivy findings (`./scripts/trivy-scan.sh` ends with `GATE PASS`).
+      Remediation: `woo-api` runtime moved to a Chainguard **Wolfi** base (Debian/
+      distroless ship no-fix HIGH/CRITICAL CVEs such as `perl-base` CVE-2026-8376 @ 9.8
+      and `ncurses` CVE-2025-69720 @ 7.8) and security-sensitive Python deps were
+      bumped in `backend/pyproject.toml` / `uv.lock`; `woo-frontend` final stage moved
+      to `nginx:alpine` (+ `apk upgrade`), which also drops the Node `serve` package
+      and its CVEs. The committed `audit/security-scan.sarif` now covers HIGH+CRITICAL
+      (empty results, ~1.4 KB). **NB:** the rebuilt images must be pushed to ghcr
+      before the platform re-scans them (see Open item 5 for the immutable tag).
 - [ ] **Image tag** — replace `latest` in `chart/values.yaml` (`image.api.tag`,
       `image.frontend.tag`) and `Chart.yaml` `appVersion` with a concrete immutable
       released tag/digest. (Open item 5.)
