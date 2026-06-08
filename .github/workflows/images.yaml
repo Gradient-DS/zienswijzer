@@ -67,9 +67,11 @@ jobs:
 
       - name: Install Trivy ${{ env.TRIVY_VERSION }}
         run: |
+          mkdir -p "$HOME/bin"
           curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin "${TRIVY_VERSION}"
-          trivy --version
+            | sh -s -- -b "$HOME/bin" "${TRIVY_VERSION}"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          "$HOME/bin/trivy" --version
 
       # Gate: any HIGH/CRITICAL (CVSS >= 7.0) finding fails the job.
       - name: Trivy gate (HIGH,CRITICAL → fail)
