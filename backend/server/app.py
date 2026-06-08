@@ -256,9 +256,9 @@ def transform(input_data: TextInput):
 def login(request: LoginRequest):
     """Login - finds user by username or email"""
     # Find user by username or email
-    logger.info(f"Login request: {request}")
+    logger.info("Login request received")
     user = db.get_user_by_username(request.username)
-    logger.info(f"User: {user}")
+    logger.info("User lookup complete")
     if not user:
         user = db.get_user_by_email(request.email)
 
@@ -285,7 +285,7 @@ def logout():
 def get_current_user():
     """Get current user - returns the first user for now"""
     users = db.get_users()[0]
-    logger.info(f"Users: {users[0]}")
+    logger.info("Current user requested")
     if not users:
         raise HTTPException(status_code=401, detail="No users found")
     return AuthMeResponse(user=User(**users[0]))
@@ -297,7 +297,7 @@ def get_workspaces():
     """Get all workspaces"""
     workspaces_data = db.get_workspaces()
     workspaces = []
-    logger.info(f"Workspaces: {workspaces_data}")
+    logger.info(f"Workspaces listed: {len(workspaces_data)}")
     for ws in workspaces_data:
         workspaces.append(
             Workspace(
@@ -316,7 +316,7 @@ def get_workspaces():
 @app.post("/workspaces", response_model=CreateWorkspaceResponse)
 def create_workspace(request: CreateWorkspaceRequest):
     """Create a new workspace"""
-    logger.info(f"Create workspace request: {request}")
+    logger.info("Create workspace request received")
     new_workspace = {
         "id": f"workspace_{len(db.get_workspaces()) + 1}",
         "name": request.name,
@@ -334,7 +334,7 @@ def create_workspace(request: CreateWorkspaceRequest):
 def get_workspace_detail(workspace_id: str):
     """Get detailed workspace information"""
     workspace = db.get_workspace_by_id(workspace_id)
-    logger.info(f"Workspace: {workspace}")
+    logger.info(f"Workspace requested: {workspace_id}")
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
@@ -382,7 +382,7 @@ def get_cases():
     """Get all cases"""
     cases_data = db.get_cases()
     cases = []
-    logger.info(f"Cases: {cases_data}")
+    logger.info(f"Cases listed: {len(cases_data)}")
     for case in cases_data:
         cases.append(
             Case(
@@ -401,7 +401,7 @@ def get_cases():
 def get_case_detail(case_id: str):
     """Get detailed case information"""
     case = db.get_case_by_id(case_id)
-    logger.info(f"Case: {case}")
+    logger.info(f"Case requested: {case_id}")
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
@@ -440,7 +440,7 @@ def get_case_detail(case_id: str):
 @app.post("/cases", response_model=CreateCaseResponse)
 def create_case(request: CreateCaseRequest):
     """Create a new case"""
-    logger.info(f"Create case request: {request}")
+    logger.info("Create case request received")
     new_case = {
         "id": f"case_{len(db.get_cases()) + 1}",
         "title": request.title,
@@ -662,7 +662,7 @@ def get_documents():
     """Get all documents"""
     documents_data = db.get_documents()
     documents = []
-    logger.info(f"Documents: {documents_data}")
+    logger.info(f"Documents listed: {len(documents_data)}")
     for doc in documents_data:
         documents.append(
             Document(
@@ -684,7 +684,7 @@ def get_documents():
 def get_document_detail(document_id: str, case_id: Optional[str] = Query(None)):
     """Get detailed document information with chunks and stakeholder mentions, optionally filtered by case for verification status"""
     document = db.get_document_by_id(document_id)
-    logger.info(f"Document: {document}")
+    logger.info(f"Document requested: {document_id}")
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -770,7 +770,7 @@ def get_document_detail(document_id: str, case_id: Optional[str] = Query(None)):
 def get_document_pdf(document_id: str):
     """Serve the PDF file for a document"""
     document = db.get_document_by_id(document_id)
-    logger.info(f"Document: {document}")
+    logger.info(f"Document requested: {document_id}")
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -870,7 +870,7 @@ def background_parse_document(doc_id: str, page_count: int):
 
     # Convert relative file path to absolute path
     file_path = Path(__file__).parent / document["file_path"]
-    logger.info(f"PDF path for NER processing: {file_path}")
+    logger.info(f"NER processing document {doc_id}")
 
     processor = MarkdownNERProcessorDB(
         markdown_path=str(document["markdown_path"]),
@@ -930,7 +930,7 @@ async def upload_document(
     case_id: str, file: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks()
 ):
     """Upload a PDF document to a case"""
-    logger.info(f"Upload document request: {case_id}, {file.filename}")
+    logger.info(f"Upload document request for case {case_id}")
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
