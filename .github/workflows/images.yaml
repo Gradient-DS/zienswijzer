@@ -24,7 +24,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  TRIVY_VERSION: v0.68.2
+  TRIVY_VERSION: v0.69.3
 
 jobs:
   build-scan-publish:
