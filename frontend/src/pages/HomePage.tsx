@@ -92,7 +92,7 @@ export default function HomePage() {
                     <div className="fixed top-4 left-4 z-50 lg:hidden">
                         <Sheet open={isSidebarOpen} onOpenChange={setSidebarOpen}>
                             <SheetTrigger asChild>
-                                <Button variant="outline" size="icon">
+                                <Button variant="outline" size="icon" aria-label="Navigatie openen">
                                     <Menu className="h-5 w-5" />
                                 </Button>
                             </SheetTrigger>
@@ -102,9 +102,9 @@ export default function HomePage() {
                             </SheetContent>
                         </Sheet>
                     </div>
-                    <div className="flex-1 overflow-y-auto w-full pt-16">
+                    <main className="flex-1 overflow-y-auto w-full pt-16">
                         <Outlet />
-                    </div>
+                    </main>
                 </>
             ) : (
                 <>
@@ -118,19 +118,20 @@ export default function HomePage() {
                     >
                         {isSidebarOpen && sidebarContent}
                     </div>
-                    <div className="flex-1 overflow-y-auto relative">
+                    <main className="flex-1 overflow-y-auto relative">
                         {!isSidebarOpen && (
                             <Button
                                 variant="outline"
                                 size="icon"
                                 className="fixed top-5 left-4 z-50"
                                 onClick={toggleSidebar}
+                                aria-label="Navigatie in- of uitklappen"
                             >
                                 <Menu className="h-5 w-5" />
                             </Button>
                         )}
                         <Outlet />
-                    </div>
+                    </main>
                 </>
             )}
         </div>

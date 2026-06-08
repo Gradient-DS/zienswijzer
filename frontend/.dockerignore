@@ -1,0 +1,14 @@
+# Never copy host build artifacts into the image — the Dockerfile runs its own
+# `npm ci` and `npm run build`. Copying host node_modules in (via `COPY . .`)
+# breaks the build with native-binary mismatches (e.g. esbuild host/binary
+# version skew) and bloats the build context.
+node_modules
+dist
+.env
+.env.*
+!.env.example
+npm-debug.log*
+.DS_Store
+.vscode
+.idea
+@

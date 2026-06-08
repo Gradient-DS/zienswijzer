@@ -23,9 +23,10 @@ spec:
   demo:
     description: docs/description.md
     screenshots:
-      - docs/screenshots/01-case-list.png
-      - docs/screenshots/02-case-overview.png
-      - docs/screenshots/03-document-detail.png
+      - docs/screenshots/overzicht.png
+      - docs/screenshots/zaak-aanmaken.png
+      - docs/screenshots/entiteiten-controleren.png
+      - docs/screenshots/kanban-board-contact-status.png
   audit:
     dpia: audit/dpia.pdf
     security_scan: audit/security-scan.sarif
