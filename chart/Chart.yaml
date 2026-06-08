@@ -5,8 +5,7 @@ type: application
 # Chart version — bump on chart changes (semver).
 version: 0.1.0
 # appVersion MUST match the released image tag set in values.yaml (image.*.tag).
-# TODO(open-item-5): replace with the concrete immutable released tag before submission.
-appVersion: "latest"
+appVersion: "0.1.0"
 home: https://github.com/gradient-ds/zienswijzer
 sources:
   - https://github.com/gradient-ds/zienswijzer
