@@ -1,29 +1,31 @@
-[build-system]
-requires = ["setuptools>=65.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "woo-server"
 version = "0.1.0"
 description = "WOO Backend Server"
-readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
+
+# Direct runtime dependencies only. Pinned to the versions currently deployed
+# (the former requirements.txt) so this migration is behaviour-preserving; the
+# full transitive set is captured in uv.lock. CVE bumps are a separate step.
 dependencies = [
-    "fastapi>=0.104.1",
-    "uvicorn[standard]>=0.24.0",
-    "pydantic>=2.10.0",
-    "python-dotenv>=1.0.0",
-    "python-multipart>=0.0.20",
-    "langchain-core>=0.1.0",
-    "langchain-pymupdf4llm>=0.1.0",
+    "fastapi==0.104.1",
+    "uvicorn[standard]==0.24.0",
+    "pydantic[email]==2.12.3",
+    "pydantic-settings==2.0.3",
+    "python-dotenv==1.0.0",
+    "python-multipart==0.0.20",
+    "langchain-core==0.3.79",
+    "langchain-pymupdf4llm==0.4.1",
     "PyMuPDF==1.26.5",
     "spacy==3.8.7",
-    "transformers==4.57.1",
+    "transformers==4.48.0",
+    "torch==2.9.0",
     "sentencepiece==0.2.1",
-    "flair==0.15.1",
+    "msal==1.24.0",
+    "requests==2.31.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest",
     "pytest-cov",
@@ -31,15 +33,29 @@ dev = [
     "ruff",
 ]
 
+# Pull torch from the PyTorch CPU index on Linux (the container runs NER on
+# device=-1, so the CUDA wheel is dead weight). On macOS/Windows torch resolves
+# from PyPI, whose default wheel is already CPU.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["server*"]
 
 [tool.black]
 line-length = 100
-target-version = ['py310']
+target-version = ['py311']
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
-
+target-version = "py311"
