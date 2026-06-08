@@ -5,7 +5,7 @@ type: application
 # Chart version — bump on chart changes (semver).
 version: 0.1.0
 # appVersion MUST match the released image tag set in values.yaml (image.*.tag).
-appVersion: "v0.1.0"
+appVersion: "0.1.0"
 home: https://github.com/gradient-ds/zienswijzer
 sources:
   - https://github.com/gradient-ds/zienswijzer
