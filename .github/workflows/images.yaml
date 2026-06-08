@@ -1,0 +1,128 @@
+name: Images — build, scan & publish
+
+# Builds the woo-api and woo-frontend images, gates them on a Trivy
+# HIGH/CRITICAL (CVSS >= 7.0) scan — the same rule the sAId-Kick app store
+# auto-rejects on — and publishes to GHCR after a merge to main or a version
+# tag. Pull requests build + scan only (no publish), so a branch is verified
+# against the exact gate before it can reach main.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write   # upload Trivy SARIF to the Security tab
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  TRIVY_VERSION: v0.68.2
+
+jobs:
+  build-scan-publish:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: woo-api
+            context: backend
+            dockerfile: backend/Dockerfile
+          - image: woo-frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute lowercase owner
+        id: vars
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build amd64 locally (the arch the app-store platform scans) so the gate
+      # below scans the exact bits we may publish.
+      - name: Build image (amd64, load)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          load: true
+          tags: ${{ matrix.image }}:ci
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      - name: Install Trivy ${{ env.TRIVY_VERSION }}
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin "${TRIVY_VERSION}"
+          trivy --version
+
+      # Gate: any HIGH/CRITICAL (CVSS >= 7.0) finding fails the job.
+      - name: Trivy gate (HIGH,CRITICAL → fail)
+        run: |
+          trivy image --quiet --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed=false \
+            --exit-code 1 --format table "${{ matrix.image }}:ci"
+
+      - name: Trivy SARIF
+        if: always()
+        run: |
+          trivy image --quiet --scanners vuln \
+            --severity HIGH,CRITICAL --format sarif \
+            --output "trivy-${{ matrix.image }}.sarif" "${{ matrix.image }}:ci" || true
+
+      - name: Upload SARIF to Security tab
+        if: always() && github.event_name == 'push' && hashFiles(format('trivy-{0}.sarif', matrix.image)) != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.image }}.sarif
+          category: trivy-${{ matrix.image }}
+
+      # ---- Publish: only on push to main / a version tag, and only if the
+      # gate above passed (success() — an explicit if drops the implicit one). ----
+      - name: Log in to GHCR
+        if: success() && github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        if: success() && github.event_name == 'push'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.vars.outputs.owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build & push (amd64)
+        if: success() && github.event_name == 'push'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
