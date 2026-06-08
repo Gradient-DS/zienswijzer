@@ -67,9 +67,13 @@ jobs:
 
       - name: Install Trivy ${{ env.TRIVY_VERSION }}
         run: |
+          set -euxo pipefail
+          ver="${TRIVY_VERSION#v}"
           mkdir -p "$HOME/bin"
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b "$HOME/bin" "${TRIVY_VERSION}"
+          curl -fsSL \
+            "https://github.com/aquasecurity/trivy/releases/download/v${ver}/trivy_${ver}_Linux-64bit.tar.gz" \
+            -o /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C "$HOME/bin" trivy
           echo "$HOME/bin" >> "$GITHUB_PATH"
           "$HOME/bin/trivy" --version
 
