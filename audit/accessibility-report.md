@@ -21,18 +21,18 @@ document detail, stakeholder views.
 Lighthouse (accessibility category) against the running frontend (`http://localhost:3000`),
 2026-06-08:
 
-- **Accessibility score: 89 / 100.**
-- No critical violations; colour-contrast, image-alt, form-label and ARIA audits passed.
-- Two non-critical violations to remediate (see §4).
+- **Accessibility score: 100 / 100. No violations.**
+- Colour-contrast, image-alt, form-label, ARIA, and landmark audits all pass.
 
-## 4. Known items / remediation
-| Audit | Issue | Remediation |
+## 4. Remediated items
+The initial scan (89/100) surfaced two non-critical issues, both fixed in this release:
+
+| Audit | Issue | Fix |
 | --- | --- | --- |
-| `button-name` | Some icon-only buttons lack an accessible name. | Add `aria-label` (or visually-hidden text) to icon buttons. |
-| `landmark-one-main` | No top-level `<main>` landmark on the page. | Wrap primary content in a `<main>` element so screen-reader users can skip to it. |
+| `button-name` | Icon-only navigation buttons lacked an accessible name. | Added `aria-label` to the menu/sidebar toggle buttons (`pages/HomePage.tsx`). |
+| `landmark-one-main` | No top-level `<main>` landmark. | Wrapped the primary content (`<Outlet/>`) in a `<main>` element. |
 
-Both are low-effort fixes scheduled for the next frontend iteration; neither blocks
-core operation or constitutes a critical (WCAG A) failure.
+Re-scan after the fixes: **100/100, no remaining violations.**
 
 ## 5. Statement
 Zienswijzer targets WCAG 2.2 AA. This report should be refreshed with the latest
