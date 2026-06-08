@@ -25,6 +25,10 @@ dependencies = [
     "transformers==4.48.0",
     "torch==2.9.0",
     "sentencepiece==0.2.1",
+    # Required by the HuggingFace SentencePiece tokenizers (xlm-roberta /
+    # robbert NER models) to build the fast tokenizer; was previously pulled in
+    # transitively. Pinned >=6.33.5 to stay clear of the Trivy CVE.
+    "protobuf>=6.33.5",
     "msal>=1.32.0",
     "requests==2.31.0",
 ]

@@ -13,7 +13,10 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        // 127.0.0.1 (not "localhost"): on macOS "localhost" resolves to IPv6
+        // ::1 first, which can collide with other :8000 publishers (e.g. a
+        // Docker container). Pinning IPv4 hits the local uvicorn directly.
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
