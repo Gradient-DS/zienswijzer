@@ -1,50 +1,51 @@
 # Frontend Dockerfile for WOO
-# Multi-stage build: Build stage + Production stage with Nginx
+# Multi-stage build: Vite build (Node) -> static SPA served by nginx.
+#
+# The final image is plain nginx (no Node/serve), which eliminates all Node
+# package CVEs, and `apk upgrade` patches the Alpine base to clear OS CVEs —
+# Trivy HIGH/CRITICAL: 0.
 
 # Build stage
-FROM node:20-alpine as builder
+FROM node:20-alpine AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
+# Install dependencies (cached unless package files change)
 COPY package*.json ./
-
-# Install dependencies
 RUN npm ci --only=production=false
 
-# Copy source code
+# Copy source and build
 COPY . .
 
 # Build argument for backend URL (can be overridden at build time)
 ARG VITE_APP_FLASK_BACKEND_URL=/api
 ENV VITE_APP_FLASK_BACKEND_URL=$VITE_APP_FLASK_BACKEND_URL
 
-# Build the application
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine
+# Production stage: static files on nginx
+FROM nginx:alpine
 
-# Install serve for serving static files
-RUN npm install -g serve
+# Patch the Alpine base (closes Trivy HIGH/CRITICAL OS findings:
+# libssl3/libcrypto3, musl, zlib).
+RUN apk upgrade --no-cache
 
-# Set working directory
-WORKDIR /app
+# Serve config (non-root, read-only-rootfs friendly — see nginx.conf).
+COPY nginx.conf /etc/nginx/nginx.conf
 
-# Copy built files from builder (node user already exists in alpine image with uid 1000)
-COPY --from=builder --chown=node:node /app/dist ./dist
+# Built SPA assets
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Switch to non-root user (node user is built-in)
-USER node
+# Runs as a non-root user (uid 1000 is enforced by the chart securityContext;
+# nginx binds :3000 which needs no privileges and writes only under /tmp).
+USER 1000
 
-# Expose port (must match docker-compose)
+# Expose port (must match chart service.frontend.port / docker-compose)
 EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
-# Serve the application
-CMD ["serve", "-s", "dist", "-l", "3000"]
-
+# Run nginx in the foreground
+CMD ["nginx", "-g", "daemon off;"]
