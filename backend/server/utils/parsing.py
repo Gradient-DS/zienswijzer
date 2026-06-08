@@ -54,7 +54,7 @@ class PDFParser:
             List[LCDocument]: List of documents, one per page.
         """
         if verbose:
-            logger.info(f"Parsing PDF: {blob.source}")
+            logger.info("Parsing PDF")
 
         page_docs: t.List[LCDocument] = list(self.parser.lazy_parse(blob))
         return page_docs
@@ -75,7 +75,7 @@ class PDFParser:
         total = len(blobs)
         for idx, blob in enumerate(blobs, start=1):
             if verbose:
-                print(f"Parsing PDF {idx}/{total}: {blob.source}")
+                print(f"Parsing PDF {idx}/{total}")
 
             docs = self.parse(blob, verbose=verbose)
             if docs:
@@ -127,7 +127,7 @@ def main(doc_id: str) -> str:
     
     # Write markdown to file
     markdown_path.write_text(full_markdown, encoding='utf-8')
-    logger.info(f"Markdown file created: {markdown_path}")
+    logger.info("Markdown file created")
 
     # Update document metadata
     document["title"] = results[0].metadata.get("title", "")

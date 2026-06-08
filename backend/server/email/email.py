@@ -536,7 +536,7 @@ def make_graph_request(
         logger.debug(f"Graph API response status: {response.status_code}")
 
         if response.status_code >= 400:
-            logger.error(f"Graph API error: {response.status_code} - {response.text}")
+            logger.error(f"Graph API error: {response.status_code}")
             raise HTTPException(status_code=response.status_code, detail=f"Microsoft Graph API error: {response.text}")
 
         # Some endpoints return 202 Accepted or 204 No Content with empty body
@@ -552,7 +552,7 @@ def make_graph_request(
         try:
             return response.json()
         except ValueError as e:
-            logger.error(f"Failed to parse JSON response: {e}, Response text: {response.text}")
+            logger.error(f"Failed to parse Graph JSON response: {e}")
             raise HTTPException(status_code=500, detail=f"Invalid JSON response from Microsoft Graph API: {str(e)}")
 
     except requests.RequestException as e:
@@ -640,7 +640,7 @@ def oauth_callback(code: Optional[str] = None, state: Optional[str] = None, erro
         user_info = make_graph_request(user_id, "me")
         email = user_info.get("mail") or user_info.get("userPrincipalName")
 
-        logger.info(f"Successfully authenticated user {user_id} with email {email}")
+        logger.info(f"Successfully authenticated user {user_id}")
 
         return OAuthCallbackResponse(
             success=True, message="Successfully authorized email access", userId=user_id, email=email
@@ -759,9 +759,9 @@ def send_email(
                         file_content = f.read()
                         content_bytes = base64.b64encode(file_content).decode("utf-8")
 
-                    logger.info(f"Read attachment from file: {attachment.filePath}")
+                    logger.info("Read attachment from file")
                 except Exception as e:
-                    logger.error(f"Failed to read attachment file {attachment.filePath}: {e}")
+                    logger.error(f"Failed to read attachment file: {e}")
                     raise HTTPException(status_code=400, detail=f"Failed to read attachment file: {str(e)}")
 
             if not content_bytes:
@@ -1467,7 +1467,7 @@ def sync_email_replies(email_id: str, threshold: float = 0.5):
                     msg_subject = msg.get("subject", "")
                     if tracking_tag in msg_subject:
                         conversation_messages.append(msg)
-                        logger.info(f"Found email in conversation: '{msg_subject}'")
+                        logger.info("Found email in tracked conversation")
 
                 if not conversation_messages:
                     logger.info(f"No emails found with tracking tag {tracking_tag} in {inbox_count} inbox messages")
